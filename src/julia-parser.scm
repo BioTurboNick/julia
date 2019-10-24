@@ -1846,10 +1846,14 @@
 (define (parse-matrix s first closer gotnewline last-end-symbol)
   (define (fix head v) (cons head (reverse v)))
   (define (update-outer v outer)
+    ;(if (and (not (null? v)) (eqv? (car v) 'semicolon))
+    ;  (error 4))
+    ;(error 9)
     (cond ((null? v)       outer)
           ((null? (cdr v)) (cons (car v) outer))
           (else            (cons (fix 'row v) outer))))
-  (define semicolon (eqv? (peek-token s) #\;))
+  (define issemicolon (eqv? (peek-token s) #\;))
+  (define semicolon-count 0)
   ;; if a [ ] expression is a cat expression, `end` is not special
   (with-bindings ((end-symbol last-end-symbol))
   (let loop ((vec   (list first))
@@ -1859,13 +1863,24 @@
                   (require-token s))))
       (if (eqv? t closer)
           (begin (take-token s)
+                 (error (update-outer vec outer))
                  (if (pair? outer)
-                     (fix 'vcat (update-outer vec outer))
+                     (fix 'ncat (update-outer vec outer))
                      (if (or (null? vec) (null? (cdr vec)))
                          (fix 'vect vec)     ; [x]   => (vect x)
                          (fix 'hcat vec))))  ; [x y] => (hcat x y)
           (case t
             ((#\; #\newline)
+              (if issemicolon
+                (begin (set! semicolon-count (1+ semicolon-count))
+                       (if (> semicolon-count 1)
+                         (set! outer (cons (list 'semicolon) outer))
+                       (error 2)))
+                ;(begin (set! semicolon-count (1+ semicolon-count))
+                ;       (if (> semicolon-count 1)
+                ;         (set! outer (cons (list 'semicolon) outer))))
+                (set! semicolon-count 0))
+                ;(set! outer (update-outer (list 'semicolon) outer)))
              (or gotnewline (take-token s))
              (set! gotnewline #f)
              (loop '() (update-outer vec outer)))
@@ -1874,7 +1889,7 @@
             ((#\] #\})
              (error (string "unexpected \"" t "\"")))
             ((for)
-             (if (and (not semicolon)
+             (if (and (not issemicolon)
                       (length= outer 1)
                       (null? vec))
                  (begin ;; if we get here, there must have been some kind of space or separator
@@ -1888,6 +1903,7 @@
                                 (if (eqv? closer #\]) #\[ #\{) " " closer
                                 "\"; got \""
                                 (deparse (car vec)) t "\"")))
+             (set! semicolon-count 0)
              (loop (cons (parse-eq* s) vec) outer))))))))
 
 (define (expect-space-before s t)
