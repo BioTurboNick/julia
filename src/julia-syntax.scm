@@ -2380,6 +2380,17 @@
                          ,.(apply append rows)))
                 `(call (top vcat) ,@a))))))
 
+  'ncat
+  (lambda (e)
+    (error (cdr e)))
+
+    ;(let ((a (car (cdr e))))
+    ;  (if (any assignment? a)
+    ;      (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
+    ;      (let ((b (cdr e
+    ;        (expand-forms
+    ;        `(call (top _cat) ,1 ,@a ,@a)))))
+
    'typed_hcat
    (lambda (e)
      (if (any assignment? (cddr e))
