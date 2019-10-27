@@ -2382,7 +2382,10 @@
 
   'ncat
   (lambda (e)
-    (error (cdr e)))
+    (let ((dims (cadr e)))
+      (let ((a (cddr e)))
+        (expand-forms
+          `(call (top _cat) ,dims ,@a)))))
 
     ;(let ((a (car (cdr e))))
     ;  (if (any assignment? a)
