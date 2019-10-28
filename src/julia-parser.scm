@@ -1209,8 +1209,6 @@
                          ((hcat)  (loop (list* 'typed_hcat ex (cdr al))))
                          ((vcat)
                           (loop (list* 'typed_vcat ex (cdr al))))
-                         ((ncat)
-                          (loop (list* 'typed_ncat ex (cdr al))))
                          ((comprehension)
                           (loop (list* 'typed_comprehension ex (cdr al))))
                          (else (error "unknown parse-cat result (internal error)")))))))
