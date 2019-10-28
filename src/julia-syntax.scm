@@ -2380,19 +2380,12 @@
                          ,.(apply append rows)))
                 `(call (top vcat) ,@a))))))
 
-  'ncat
-  (lambda (e)
-    (let ((dims (cadr e)))
-      (let ((a (cddr e)))
-        (expand-forms
-          `(call (top _cat) ,dims ,@a)))))
-
-    ;(let ((a (car (cdr e))))
-    ;  (if (any assignment? a)
-    ;      (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
-    ;      (let ((b (cdr e
-    ;        (expand-forms
-    ;        `(call (top _cat) ,1 ,@a ,@a)))))
+   'ncat
+   (lambda (e)
+     (let ((dims (cadr e)))
+       (let ((a (cddr e)))
+         (expand-forms
+           `(call (top _cat) ,dims ,@a)))))
 
    'typed_hcat
    (lambda (e)
