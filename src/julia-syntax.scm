@@ -2414,7 +2414,15 @@
                      ,.(apply append rows)))
             `(call (top typed_vcat) ,t ,@a)))))
 
-   '|'|  (lambda (e) (expand-forms `(call |'| ,(cadr e))))
+    'typed_ncat
+    (lambda (e)
+      (let ((t (car e)))
+        (let ((dims (caddr e)))
+          (let ((a (cdddr e)))
+            (expand-forms
+              `(call (top _cat_t) ,t ,dims ,@a))))))
+
+   '|'|  (lambda (e) (expand-forms `(call (top adjoint) ,(cadr e))))
 
    'generator
    (lambda (e)
