@@ -264,14 +264,17 @@ end
 
 # typeinfo agnostic
 # n-dimensional arrays
-function show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices::Bool)
+function show_nd(io::IO, a::AbstractArray, print_matrix::Function, show_full::Bool)
     limit::Bool = get(io, :limit, false)
     if isempty(a)
         return
     end
     tailinds = tail(tail(axes(a)))
     nd = ndims(a)-2
-    for I in CartesianIndices(tailinds)
+    show_full || print(io, "[")
+    Is = CartesianIndices(tailinds)
+    lastidxs = Is[1].I
+    for I in Is
         idxs = I.I
         if limit
             for i = 1:nd
@@ -296,16 +299,28 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices:
                 end
             end
         end
-        if label_slices
+        if show_full
             print(io, "[:, :, ")
             for i = 1:(nd-1); print(io, "$(idxs[i]), "); end
             println(io, idxs[end], "] =")
         end
         slice = view(a, axes(a,1), axes(a,2), idxs...)
-        print_matrix(io, slice)
-        print(io, idxs == map(last,tailinds) ? "" : "\n\n")
+        if show_full
+            print_matrix(io, slice)
+            print(io, idxs == map(last,tailinds) ? "" : "\n\n")
+        else
+            idxdiff = lastidxs .- idxs .< 0
+            if any(idxdiff)
+                lastchangeindex = 1 + findlast(idxdiff)
+                [print(io, ";") for i ∈ 1:lastchangeindex]
+                print(io, " ")
+            end
+            print_matrix(io, slice)
+        end
         @label skip
+        lastidxs = idxs
     end
+    show_full || print(io, "]")
 end
 
 # print_array: main helper functions for show(io, text/plain, array)
@@ -370,7 +385,8 @@ end
 `_show_nonempty(io, X::AbstractMatrix, prefix)` prints matrix X with opening and closing square brackets,
 preceded by `prefix`, supposed to encode the type of the elements.
 """
-function _show_nonempty(io::IO, X::AbstractMatrix, prefix::String)
+_show_nonempty(io::IO, X::AbstractMatrix, prefix::String) = _show_nonempty(io, X, prefix, false)
+function _show_nonempty(io::IO, X::AbstractMatrix, prefix::String, drop_brackets::Bool)
     @assert !isempty(X)
     limit = get(io, :limit, false)::Bool
     indr, indc = axes(X,1), axes(X,2)
@@ -388,7 +404,7 @@ function _show_nonempty(io::IO, X::AbstractMatrix, prefix::String)
             cdots = true
         end
     end
-    print(io, prefix, "[")
+    drop_brackets || print(io, prefix, "[")
     for rr in (rr1, rr2)
         for i in rr
             for cr in (cr1, cr2)
@@ -410,12 +426,12 @@ function _show_nonempty(io::IO, X::AbstractMatrix, prefix::String)
         end
         last(rr) != nr && rdots && print(io, "\u2026 ; ")
     end
-    print(io, "]")
+    drop_brackets || print(io, "]")
 end
 
 
 _show_nonempty(io::IO, X::AbstractArray, prefix::String) =
-    show_nd(io, X, (io, slice) -> _show_nonempty(io, slice, prefix), false)
+    show_nd(io, X, (io, slice) -> _show_nonempty(io, slice, prefix, true), false)
 
 # a specific call path is used to show vectors (show_vector)
 _show_nonempty(::IO, ::AbstractVector, ::String) =
