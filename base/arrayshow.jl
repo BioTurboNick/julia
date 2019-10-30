@@ -273,7 +273,7 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, show_full::Bo
     nd = ndims(a)-2
     show_full || print(io, "[")
     Is = CartesianIndices(tailinds)
-    lastidxs = Is[1].I
+    lastidxs = first(Is).I
     for I in Is
         idxs = I.I
         if limit
@@ -321,6 +321,7 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, show_full::Bo
         lastidxs = idxs
     end
     show_full || print(io, "]")
+    ()
 end
 
 # print_array: main helper functions for show(io, text/plain, array)
@@ -427,6 +428,7 @@ function _show_nonempty(io::IO, X::AbstractMatrix, prefix::String, drop_brackets
         last(rr) != nr && rdots && print(io, "\u2026 ; ")
     end
     drop_brackets || print(io, "]")
+    ()
 end
 
 
