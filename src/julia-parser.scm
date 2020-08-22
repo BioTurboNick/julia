@@ -1211,6 +1211,8 @@
                           (loop (list* 'typed_vcat ex (cdr al))))
                          ((comprehension)
                           (loop (list* 'typed_comprehension ex (cdr al))))
+                         ((ncat)
+                          (loop (list* 'typed_ncat ex (cdr al))))
                          (else (error "unknown parse-cat result (internal error)")))))))
             ((|.|)
              (disallow-space s ex t)

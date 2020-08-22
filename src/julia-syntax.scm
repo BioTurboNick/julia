@@ -2416,11 +2416,11 @@
 
     'typed_ncat
     (lambda (e)
-      (let ((t (car e)))
-        (let ((dims (caddr e)))
-          (let ((a (cdddr e)))
-            (expand-forms
-              `(call (top _cat_t) ,t ,dims ,@a))))))
+      (let ((t (cadr e))
+            (na (cddr e)))
+        (let ((n (car na))
+              (a (cdr na)))
+          (expand-forms `(call (top _cat_t) ,n ,t ,@a)))))
 
    '|'|  (lambda (e) (expand-forms `(call (top adjoint) ,(cadr e))))
 
