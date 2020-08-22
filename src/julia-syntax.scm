@@ -2382,10 +2382,10 @@
 
    'ncat
    (lambda (e)
-     (let ((dims (cadr e)))
+     (let ((n (cadr e)))
        (let ((a (cddr e)))
          (expand-forms
-           `(call (top _cat) ,dims ,@a)))))
+           `(call (top _cat) ,n ,@a)))))
 
    'typed_hcat
    (lambda (e)
