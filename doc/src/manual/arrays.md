@@ -228,7 +228,7 @@ These syntaxes are shorthands for function calls that themselves are convenience
 
 | Syntax            | Function        | Description                                                                              |
 |:----------------- |:--------------- |:---------------------------------------------------------------------------------------- |
-| `[A;;B;; ...]`    | [`cat`](@ref)   | concatenate input arrays along dimension(s) `k`, where the number of semicolons is `k-1` |
+| `[A;; B;; ...]`   | [`cat`](@ref)   | concatenate input arrays along dimension(s) `k`, where the number of semicolons is `k-1` |
 | `[A; B; C; ...]`  | [`vcat`](@ref)  | shorthand for `cat(A...; dims=1)                                                         |
 | `[A B C ...]`     | [`hcat`](@ref)  | shorthand for `cat(A...; dims=2)                                                         |
 | `[A B; C D; ...]` | [`hvcat`](@ref) | simultaneous vertical and horizontal concatenation                                       |
