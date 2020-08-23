@@ -1865,7 +1865,9 @@
       (2
         (fix 'vcat v))
       (else
-        (fixcat 'ncat i v))))
+        (cond ((null? (cdr v)) (car v)) ; don't wrap single values from last level 
+              (else            (fixcat 'ncat i v))))))
+        ;(fixcat 'ncat i v))))
   (define (collapse-levels i n a)
     (if (= n 0)
       (fix-level 0 (car a))
