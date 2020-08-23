@@ -1863,7 +1863,8 @@
         (cond ((null? (cdr v)) (car v)) ; don't wrap single-column values [x;y;z]
               (else            (fix 'row v))))
       (2
-        (fix 'vcat v))
+        (cond ((and (null? (cdr v)) (atom? (car v))) (car v)) ; don't wrap single values [x;; ...]
+              (else            (fix 'vcat v))))
       (else
         (cond ((null? (cdr v)) (car v)) ; don't wrap single values from last level
               (else            (fixcat 'ncat i v))))))
