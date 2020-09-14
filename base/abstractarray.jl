@@ -1834,6 +1834,8 @@ block columns.
 hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
 hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat{T}...) where {T} = typed_hvcat(T, rows, xs...)
 
+hvncat(dims::Tuple{Vararg{Int}}, rows::Tuple{Vararg{Int}}, xs...) = reshape(hvcat(rows, xs...), dims)
+
 function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMat...) where T
     nbr = length(rows)  # number of block rows
 
