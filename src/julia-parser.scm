@@ -1866,7 +1866,7 @@
                (set! dims (cond ((< semicolon-count max-level) (head1+ dims)) ; if hadn't reached a final semicolon, increment needed
                                 (else                          dims)))
                (cond ((= (length dims) 1)
-                       (cond ((= (car dims) 1)
+                       (cond ((= max-level 0)
                                (cond ((= rown 1) (fix 'vect a))           ; [x]   => vect x
                                      (else       (fix 'hcat a))))         ; [x y] => hcat x y
                              (else               (fix 'vcat a))))         ; [x;y] => vcat x y
@@ -1890,7 +1890,7 @@
                      ; collect the new values into a row on first new semicolon, if row length > 1
                      (set! a (cond ((and (= semicolon-count 1) (> rown 1)) (cons '() (fixrow a)))
                                    (else                                   a)))
-                     (set! max-level (max max-level semicolon-count));;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; somehow dims is an array at the end instead of a list
+                     (set! max-level (max max-level semicolon-count))
                      (parse-matrix-inner s a dims rown semicolon-count max-level closer #f))))
           ((#\,)
             (error "unexpected comma in matrix expression"))
