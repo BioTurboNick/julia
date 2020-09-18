@@ -2033,47 +2033,6 @@ function hvncat_fill(a::Array{T, N}, xs::Tuple) where T where N
     a
 end
 
-# vncat(rows::Tuple{Vararg{Int}}) = []
-# vncat(dims::Tuple{Vararg{Int, 1}}, xs...) = vcat(xs...)
-# vncat(dims::Tuple{Vararg{Int, N}}, xs::T...) where T <:Number where N = typed_vncat(T, dims, xs...)
-
-# vncat(dims::Tuple{Vararg{Int}}, xs::Number...) = typed_vncat(promote_typeof(xs...), dims, xs...)
-# vncat(dims::Tuple{Vararg{Int}}, xs...) = typed_vncat(promote_eltypeof(xs...), dims, xs...)
-
-# typed_vncat(::Type{T}, dims::Tuple{Vararg{Int, 1}}, xs::Number...) where T = typed_vcat(T, xs...)
-# function typed_vncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, xs::Number...) where T where N
-#     dims[2] == 1 || throw(ArgumentError("vncat must have a 1-length second dimension"))
-#     if prod(dims) != length(xs)
-#         throw(ArgumentError("argument count does not match specified shape (expected $(prod(dims)), got $(length(xs)))"))
-#     end
-#     hvncat_fill(Array{T, N}(undef, dims...), xs)
-# end
-
-# vncat(rows::Tuple{Vararg{Int}}) = []
-# vncat(dims::Tuple{Vararg{Int, 1}}, args...) = throw(ArgumentError("dims argument must include 3 or more values"))
-# vncat(dims::Tuple{Vararg{Int, 2}}, args...) = throw(ArgumentError("dims argument must include 3 or more values"))
-# function vncat(dims::Tuple{Vararg{Int, N}}, xs::T...) where T <:Number where N # although maybe this could just be a call to reshape?
-#     dims[2] == 1 || throw(ArgumentError("vncat must have a 1-length second dimension"))
-#     a = Array{Int,N}(undef, dims...)
-#     if length(a) != length(xs)
-#         throw(ArgumentError("argument count does not match specified shape (expected $(length(a)), got $(length(xs)))"))
-#     end
-
-#     nr = dims[1]
-#     k = 1
-#     for d=3:N
-#         ndlow = dims[3:(d-1)]
-#         ndhigh = dims[(d+1):end]
-#         @inbounds for di=1:dims[d]
-#             for i=1:nr
-#                 a[i,1,ndlow...,di,ndhigh...] = xs[k]
-#                 k += 1
-#             end
-#         end
-#     end
-#     a
-# end
-
 ## Reductions and accumulates ##
 
 function isequal(A::AbstractArray, B::AbstractArray)
