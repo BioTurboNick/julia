@@ -1846,60 +1846,52 @@
      `(comprehension ,gen))))
 
 (define (parse-matrix s first closer gotnewline last-end-symbol)
-  (define (fix head v) (cons head (reverse v)))
-  (define (fixcat head dims v) (cons head (cons dims (reverse v))))
-  (define (ncons i v l) ; cons an element v i times to the front of a list
-    (cond ((<= i 0) l)
-          (else     (ncons (1- i) v (cons v l)))))
-  (define (nthcdr i l) ; get the list i elements back
-    (cond ((<= i 0) l)
-          (else     (nthcdr (1- i) (cdr l)))))
-  (define (fix-level i v)
-    (case i
-      (0 ; only true if no semicolons encountered when closer reached
-        (cond ((null? (cdr v)) (fix 'vect (car v)))   ; [x]   => vect x
-              (else            (fix 'hcat v))))       ; [x y] => hcat x y
-      (1
-        (cond ((null? (cdr v)) (car v)) ; don't wrap single-column values [x;y;z]
-              (else            (fix 'row v))))
-      (2
-        (cond ((and (null? (cdr v)) (atom? (car v))) (car v)) ; don't wrap single values [x;; ...]
-              (else            (fix 'vcat v))))
-      (else
-        (cond ((null? (cdr v)) (car v)) ; don't wrap single values from last level
-              (else            (fixcat 'ncat i v))))))
-  (define (collapse-levels i n a)
-    (if (= n 0)
-      (fix-level 0 (car a))
-      (let ((inext (1+ i)))
-        (if (= i n)
-          (fix-level inext (car a))
-          (begin (if (null? (car a))
-                   (set! a (cdr a))
-                   (begin (let ((afix (fix-level inext (car a))))
-                               (set! a (cons (cons afix (cadr a)) (cddr a))))))
-                 (collapse-levels inext n a))))))
-  (define (parse-matrix-inner s a semicolon-count max-level closer gotnewline)
+  (define (fix head v)
+    (cons head (reverse v)))
+  (define (fixrow l)
+    (let ((lfix (fix 'row (car l))))
+      (cons lfix (cdr l))))
+  (define (fixcat head dims v)
+    (cons head (cons (cons 'tuple (reverse dims)) (reverse v))))
+  (define (head1+ l) 
+    (cons (1+ (car l)) (cdr l)))
+  (define (parse-matrix-inner s a dims rown semicolon-count max-level closer gotnewline)
     (let ((t (cond ((or gotnewline (eqv? (peek-token s) #\newline)) #\newline)
                    (else                                            (require-token s)))))
       (if (eqv? t closer)
         (begin (take-token s)
-               (collapse-levels 0 max-level a))
+               (set! a (cond ((or (= rown 1) (= max-level 0))  (car a))       ; no rows or row vector
+                             ((= semicolon-count 0)            (fixrow a))    ; last values haven't been fixed yet
+                             (else                             (cdr a))))     ; null was added in anticipation of new item
+               (set! dims (cond ((< semicolon-count max-level) (head1+ dims)) ; if hadn't reached a final semicolon, increment needed
+                                (else                          dims)))
+               (cond ((= (length dims) 1)
+                       (cond ((= (car dims) 1)
+                               (cond ((= rown 1) (fix 'vect a))           ; [x]   => vect x
+                                     (else       (fix 'hcat a))))         ; [x y] => hcat x y
+                             (else               (fix 'vcat a))))         ; [x;y] => vcat x y
+                     (else                       (fixcat 'ncat dims a)))) ; [x;;y] => ncat dims x y
         (case t
           ((#\; #\newline)
             (or gotnewline (take-token s))
-            (if (and (eqv? t #\newline)                                  ; treat any number of line breaks not prior to a
-                     (or (memv (peek-token s) (list #\newline #\; 'for)) ; comprehension as a semicolon if semicolons absent
+            (if (and (eqv? t #\newline)                                  
+                     (or (memv (peek-token s) (list #\newline #\; 'for))
                          (> semicolon-count 0)))
-              (parse-matrix-inner s a semicolon-count max-level closer #f)
-              (begin (let ((ant (nthcdr semicolon-count a)))
-                       (set! semicolon-count (1+ semicolon-count))
-                       (let ((afix (fix-level semicolon-count (car ant))))
-                         (set! a (cond ((> semicolon-count max-level) (cons (list afix) '()))
-                                       (else                          (cons (cons afix (cadr ant)) (cddr ant)))))))
-                     (set! a (ncons semicolon-count '() a))
-                     (set! max-level (max max-level semicolon-count))
-                     (parse-matrix-inner s a semicolon-count max-level closer #f))))
+              ; treat any number of line breaks not prior to a comprehension as a semicolon if semicolons absent
+              (parse-matrix-inner s a dims rown semicolon-count max-level closer #f)
+              (begin (set! semicolon-count (1+ semicolon-count))
+                     ; append row length to dimension list if we have reached a 3rd dimension (only used for 3+)
+                     (if (and (= semicolon-count 2) (= max-level 1))
+                       (set! dims (cons rown dims)))
+                     (set! dims (cond ((= max-level 0)               (list 1))      ; first semicolon
+                                      ((> semicolon-count max-level) (cons 1 dims)) ; new dimension, extend dims
+                                      ((= semicolon-count max-level) (head1+ dims)) ; new member of max dimension, increment
+                                      (else                          dims)))        ; no change
+                     ; collect the new values into a row on first new semicolon, if row length > 1
+                     (set! a (cond ((and (= semicolon-count 1) (> rown 1)) (cons '() (fixrow a)))
+                                   (else                                   a)))
+                     (set! max-level (max max-level semicolon-count));;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; somehow dims is an array at the end instead of a list
+                     (parse-matrix-inner s a dims rown semicolon-count max-level closer #f))))
           ((#\,)
             (error "unexpected comma in matrix expression"))
           ((#\] #\})
@@ -1913,17 +1905,14 @@
                      (parse-comprehension s (caar a) closer))
               (error "invalid comprehension syntax")))
           (else
-            (if (and (pair? (car a)) (not (ts:space? s)))
-              (error (string "expected \"" closer "\" or separator in arguments to \""
-                             (if (eqv? closer #\]) #\[ #\{) " " closer
-                             "\"; got \""
-                             (deparse (caar a)) t "\"")))
             (let ((u (parse-eq* s)))
               (set! a (cons (cons u (car a)) (cdr a)))
-              (parse-matrix-inner s a 0 max-level closer #f)))))))
-   ;; if a [ ] expression is a cat expression, `end` is not special
-   (with-bindings ((end-symbol last-end-symbol))
-     (parse-matrix-inner s (cons (list first) '()) 0 0 closer gotnewline)))
+              ; increment count of row elements only before first semicolon reached
+              (set! rown (cond ((= max-level 0) (1+ rown))
+                               (else            rown)))
+              (parse-matrix-inner s a dims rown 0 max-level closer #f)))))))
+  (with-bindings ((end-symbol last-end-symbol))
+    (parse-matrix-inner s (cons (list first) '()) (list 1) 1 0 0 closer gotnewline)))
 
 (define (expect-space-before s t)
   (if (not (ts:space? s))

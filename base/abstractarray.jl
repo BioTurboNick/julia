@@ -1499,6 +1499,7 @@ function _typed_vcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
     nargs = length(A)
     nrows = sum(a->size(a, 1), A)::Int
     ncols = size(A[1], 2)
+    print(A)
     for j = 2:nargs
         if size(A[j], 2) != ncols
             throw(ArgumentError("number of columns of each array must match (got $(map(x->size(x,2), A)))"))
@@ -1834,8 +1835,6 @@ block columns.
 hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
 hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat{T}...) where {T} = typed_hvcat(T, rows, xs...)
 
-hvncat(dims::Tuple{Vararg{Int}}, rows::Tuple{Vararg{Int}}, xs...) = reshape(hvcat(rows, xs...), dims)
-
 function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMat...) where T
     nbr = length(rows)  # number of block rows
 
@@ -1943,6 +1942,122 @@ function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T
     end
     T[rs...;]
 end
+
+hvncat(rows::Tuple{Vararg{Int}}) = []
+hvncat(dims::Tuple{Vararg{Int, 1}}, xs...) = vcat(xs...)
+hvncat(dims::Tuple{Vararg{Int, 2}}, xs...) = hvcat(ntuple(x->dims[2]), xs...)
+function hvncat(dims::Tuple{Vararg{Int, N}}, xs::T...) where T <:Number where N
+    a = Array{Int,N}(undef, dims...)
+    if prod(dims) != length(xs)
+        throw(ArgumentError("argument count does not match specified shape (expected $(prod(dims)), got $(length(xs)))"))
+    end
+
+    nr = dims[1]
+    nc = dims[2]
+    k = 1
+    na = prod(dims[3:N])
+    @inbounds for d=1:na
+        for i=1:nr
+            for j=1:nc
+                a[i+nr*(j-1)+nr*nc*(d-1)] = xs[k]
+                k += 1
+            end
+        end
+    end
+    a
+end
+
+hvncat(dims::Tuple{Vararg{Int}}, xs::Number...) = typed_hvncat(promote_typeof(xs...), dims, xs...)
+hvncat(dims::Tuple{Vararg{Int}}, xs...) = typed_hvncat(promote_eltypeof(xs...), dims, xs...)
+
+typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, 1}}, xs::Number...) where T = typed_vcat(T, xs...)
+typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, 2}}, xs::Number...) where T = typed_hvcat(T, ntuple(x->dims[2]), xs...)
+function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, xs::Number...) where T where N
+    if prod(dims) != length(xs)
+        throw(ArgumentError("argument count $(len) does not match specified shape $(dims)"))
+    end
+    hvncat_fill(Array{T, N}(undef, dims...), xs)
+end
+
+function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int}}, as...) where T
+    nbr = length(rows)  # number of block rows
+    rs = Vector{Any}(undef, nbr)
+    a = 1
+    for i = 1:nbr
+        rs[i] = typed_hcat(T, as[a:a-1+rows[i]]...)
+        a += rows[i]
+    end
+    T[rs...;]
+end
+
+function hvncat_fill(a::Array{T, N}, xs::Tuple) where T where N
+    dims = size(a)
+    nc = dims[1]
+    nr = dims[2]
+    @inbounds for d=3:N
+        ndlow = dims[3:(d-1)]
+        ndhigh = dims[(d+1):end]
+        for di=1:dims[d]
+            for i=1:nr
+                for j=1:nc
+                    a[i,j,ndlow...,di,ndhigh...] = xs[k]
+                    k += 1
+                end
+            end
+        end
+    end
+    a
+end
+
+vncat(rows::Tuple{Vararg{Int}}) = []
+vncat(dims::Tuple{Vararg{Int, 1}}, xs...) = vcat(xs...)
+function vncat(dims::Tuple{Vararg{Int, N}}, xs::T...) where T <:Number where N
+    dims[2] == 1 || throw(ArgumentError("vncat must have a 1-length second dimension"))
+    if prod(dims) != length(xs)
+        throw(ArgumentError("argument count does not match specified shape (expected $(prod(dims)), got $(length(xs)))"))
+    end
+    reshape(vcat(xs...), dims)
+end
+
+vncat(dims::Tuple{Vararg{Int}}, xs::Number...) = typed_vncat(promote_typeof(xs...), dims, xs...)
+vncat(dims::Tuple{Vararg{Int}}, xs...) = typed_vncat(promote_eltypeof(xs...), dims, xs...)
+
+typed_vncat(::Type{T}, dims::Tuple{Vararg{Int, 1}}, xs::Number...) where T = typed_vcat(T, xs...)
+function typed_vncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, xs::Number...) where T where N
+    if prod(dims) != length(xs)
+        throw(ArgumentError("argument count $(length(xs)) does not match specified shape $(dims)"))
+    end
+    a = Array{T, N}(undef, dims...)
+    @inbounds for i=1:prod(dims)
+        a[i] = xs[i]
+    end
+    a
+end
+
+# vncat(rows::Tuple{Vararg{Int}}) = []
+# vncat(dims::Tuple{Vararg{Int, 1}}, args...) = throw(ArgumentError("dims argument must include 3 or more values"))
+# vncat(dims::Tuple{Vararg{Int, 2}}, args...) = throw(ArgumentError("dims argument must include 3 or more values"))
+# function vncat(dims::Tuple{Vararg{Int, N}}, xs::T...) where T <:Number where N # although maybe this could just be a call to reshape?
+#     dims[2] == 1 || throw(ArgumentError("vncat must have a 1-length second dimension"))
+#     a = Array{Int,N}(undef, dims...)
+#     if length(a) != length(xs)
+#         throw(ArgumentError("argument count does not match specified shape (expected $(length(a)), got $(length(xs)))"))
+#     end
+
+#     nr = dims[1]
+#     k = 1
+#     for d=3:N
+#         ndlow = dims[3:(d-1)]
+#         ndhigh = dims[(d+1):end]
+#         @inbounds for di=1:dims[d]
+#             for i=1:nr
+#                 a[i,1,ndlow...,di,ndhigh...] = xs[k]
+#                 k += 1
+#             end
+#         end
+#     end
+#     a
+# end
 
 ## Reductions and accumulates ##
 

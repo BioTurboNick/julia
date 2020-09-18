@@ -383,6 +383,8 @@ export
     first,
     hcat,
     hvcat,
+    hncat,
+    hvncat,
     indexin,
     argmax,
     argmin,

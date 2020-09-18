@@ -2380,12 +2380,30 @@
                          ,.(apply append rows)))
                 `(call (top vcat) ,@a))))))
 
-   'ncat
+   'ncat ;; add error handling from vcat TODO
    (lambda (e)
      (let ((n (cadr e)))
        (let ((a (cddr e)))
-         (expand-forms
-           `(call (top _cat) ,n ,@a)))))
+         (if (any assignment? a)
+           (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
+         (if (has-parameters? a)
+           (error "unexpected semicolon in array expression")
+           (expand-forms
+             (if (any (lambda (x)
+                           (and (pair? x) (eq? (car x) 'row)))
+                         a)
+              ;; convert nested hcat inside ncat to hvncat
+              (let ((rows (map (lambda (x)
+                                  (if (and (pair? x) (eq? (car x) 'row))
+                                      (cdr x)
+                                      (list x)))
+                                a)))
+                  `(call (top hvncat)
+                         ,n
+                         ,.(apply append rows)))
+              `(call (top vncat)
+                     ,n
+                     ,@a)))))))
 
    'typed_hcat
    (lambda (e)
@@ -2420,7 +2438,24 @@
             (na (cddr e)))
         (let ((n (car na))
               (a (cdr na)))
-          (expand-forms `(call (top _cat_t) ,n ,t ,@a)))))
+          (if (any assignment? (cddr e))
+           (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
+           (expand-forms
+             (if (any (lambda (x)
+                       (and (pair? x) (eq? (car x) 'row)))
+                     a)
+                 ;; convert nested hcat inside vcat to hvcat
+                 (let ((rows (map (lambda (x)
+                                   (if (and (pair? x) (eq? (car x) 'row))
+                                       (cdr x)
+                                       (list x)))
+                                 a)))
+                   `(call (top typed_hvncat) ,t
+                         ,n
+                         ,.(apply append rows)))
+              `(call (top typed_vncat) ,t
+                     ,n
+                     ,@a))))))
 
    '|'|  (lambda (e) (expand-forms `(call (top adjoint) ,(cadr e))))
 
