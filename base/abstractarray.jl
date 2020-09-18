@@ -1499,7 +1499,6 @@ function _typed_vcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
     nargs = length(A)
     nrows = sum(a->size(a, 1), A)::Int
     ncols = size(A[1], 2)
-    print(A)
     for j = 2:nargs
         if size(A[j], 2) != ncols
             throw(ArgumentError("number of columns of each array must match (got $(map(x->size(x,2), A)))"))
