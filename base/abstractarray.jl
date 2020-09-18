@@ -1815,7 +1815,7 @@ julia> hvcat((3,3), a,b,c,d,e,f)
  1  2  3
  4  5  6
 
-julia> [a b;c d; e f]
+julia> [a b; c d; e f]
 3×2 Matrix{Int64}:
  1  2
  3  4
@@ -1942,6 +1942,52 @@ function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T
     T[rs...;]
 end
 
+"""
+    hvncat(dims::Tuple{Vararg{Int}}, values...)
+
+Horizontal, vertical, and n-dimensional concatenation in one call. This function is called
+for block matrix syntax. The first argument specifies the number of arguments to
+concatenate in each block row.
+
+# Examples
+```jldoctest
+julia> a, b, c, d, e, f = 1, 2, 3, 4, 5, 6
+(1, 2, 3, 4, 5, 6)
+
+julia> [a b c;; d e f]
+1×3×2 Array{Int64, 3}:
+[:, :, 1] =
+ 1  2  3
+
+[:, :, 2] =
+ 4  5  6
+
+julia> hvncat((2,1,3), a,b,c,d,e,f)
+2×1×3 Array{Int64, 3}:
+[:, :, 1] =
+ 1
+ 2
+
+[:, :, 2] =
+ 3
+ 4
+
+[:, :, 3] =
+ 5
+ 6
+
+julia> [a b;; c d;; e f]
+1×2×3 Array{Int64, 3}:
+[:, :, 1] =
+ 1  2
+
+[:, :, 2] =
+ 3  4
+
+[:, :, 3] =
+ 5  6
+```
+"""
 hvncat(dims::Tuple{Vararg{Int}}) = []
 hvncat(dims::Tuple{Vararg{Int, 1}}, xs...) = vcat(xs...)
 hvncat(dims::Tuple{Vararg{Int, 2}}, xs...) = hvcat(ntuple(x->dims[2]), xs...)
