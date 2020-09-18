@@ -2380,7 +2380,7 @@
                          ,.(apply append rows)))
                 `(call (top vcat) ,@a))))))
 
-   'ncat ;; add error handling from vcat TODO
+   'ncat
    (lambda (e)
      (let ((n (cadr e)))
        (let ((a (cddr e)))
@@ -2401,7 +2401,7 @@
                   `(call (top hvncat)
                          ,n
                          ,.(apply append rows)))
-              `(call (top vncat)
+              `(call (top hvncat)
                      ,n
                      ,@a)))))))
 
@@ -2453,7 +2453,7 @@
                    `(call (top typed_hvncat) ,t
                          ,n
                          ,.(apply append rows)))
-              `(call (top typed_vncat) ,t
+              `(call (top typed_hvncat) ,t
                      ,n
                      ,@a))))))
 
