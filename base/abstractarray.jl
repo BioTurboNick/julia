@@ -2005,15 +2005,22 @@ function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, xs::Number...) whe
     hvncat_fill(Array{T, N}(undef, dims...), xs)
 end
 
-function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int}}, as...) where T #TODO and also ARRAY methods
-    nbr = length(rows)  # number of block rows
-    rs = Vector{Any}(undef, nbr)
-    a = 1
-    for i = 1:nbr
-        rs[i] = typed_hcat(T, as[a:a-1+rows[i]]...)
-        a += rows[i]
+function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as...) where T where N
+    na = prod(dims[3:end])
+    nr = dims[1]
+    nc = dims[2]
+    a = Array{T, N}(undef, dims...)
+    k = 1
+    for d = 1:na
+        jstart = (d - 1)*nc*nr
+        jend = d*nc*nr - 1
+        for i = 1:nr
+            js = (i+jstart):nr:(i+jend)
+            a[js] = typed_hcat(T, as[k:k-1+nc]...)
+            k += nc
+        end
     end
-    T[rs...;]
+    a
 end
 
 function hvncat_fill(a::Array{T, N}, xs::Tuple) where T where N
