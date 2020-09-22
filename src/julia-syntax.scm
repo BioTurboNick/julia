@@ -2400,8 +2400,9 @@
                                 a)))
                   `(call (top hvncat)
                          ,n
+                         (tuple ,.(map length rows))
                          ,.(apply append rows)))
-              `(call (top hvncat)
+              `(call (top vncat)
                      ,n
                      ,@a)))))))
 

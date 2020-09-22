@@ -1852,7 +1852,7 @@
     (let ((lfix (fix 'row (car l))))
       (cons lfix (cdr l))))
   (define (fixcat head dims v)
-    (cons head (cons (cons 'tuple (reverse dims)) (reverse v))))
+    (cons head (cons (cons 'tuple dims) (reverse v))))
   (define (head1+ l) 
     (cons (1+ (car l)) (cdr l)))
   (define (parse-matrix-inner s a dims rown semicolon-count max-level closer gotnewline)
@@ -1860,17 +1860,37 @@
                    (else                                            (require-token s)))))
       (if (eqv? t closer)
         (begin (take-token s)
-               (set! a (cond ((or (= rown 1) (= max-level 0))  (car a))       ; no rows or row vector
-                             ((= semicolon-count 0)            (fixrow a))    ; last values haven't been fixed yet
-                             (else                             (cdr a))))     ; null was added in anticipation of new item
-               (set! dims (cond ((< semicolon-count max-level) (head1+ dims)) ; if hadn't reached a final semicolon, increment needed
-                                (else                          dims)))
-               (cond ((= (length dims) 1)
-                       (cond ((= max-level 0)
-                               (cond ((= rown 1) (fix 'vect a))           ; [x]   => vect x
-                                     (else       (fix 'hcat a))))         ; [x y] => hcat x y
-                             (else               (fix 'vcat a))))         ; [x;y] => vcat x y
-                     (else                       (fixcat 'ncat dims a)))) ; [x;;y] => ncat dims x y
+               (set! dims (reverse (cond ((< semicolon-count max-level) (head1+ dims)) ; if hadn't reached a final semicolon, increment needed
+                                         (else                          dims))))
+               (set! a (cond ((= semicolon-count 0) 
+                               (cond ((> (length (car a)) 1) (fixrow a))                ; hcat present, fix accumulated values into row
+                                     (else                   (cons (caar a) (cdr a))))) ; move remaining value in head accumulator into tail
+                             (else                           (cdr a))))                 ; remove null added in anticipation of next set
+               ;(error (string a " | " dims " | " rown " | " max-level " | " semicolon-count))
+
+
+              ;  (set! a (cond ((= semicolon-count 0) 
+              ;                  (cond ((> (length (car a)) 1) (fixrow a))
+              ;                         (else                  (cons (caar a) (cdr a)))))
+              ;                ((> semicolon-count 0)          (cdr a))
+              ;                (())
+
+
+              ;  (set! a (cond ((or (= rown 1) (= max-level 0))  (car a))       ; no rows or row vector
+              ;                ((= semicolon-count 0)            (fixrow a))    ; last values haven't been fixed yet
+              ;                (else                             (cdr a))))     ; null was added in anticipation of new item
+
+               (cond ((= max-level 0)
+                        (cond ((= rown 1) (fix 'vect a))
+                              (else       (fix 'hcat (reverse (cdar a))))))   ; strip row symbol
+                     ((= max-level 1)     (fix 'vcat a))
+                     (else                (fixcat 'ncat dims a))))
+              ;  (cond ((= (length dims) 1) ; only > 1 if 3rd dimension seen
+              ;          (cond ((= max-level 0)
+              ;                  (cond ((= rown 1) (fix 'vect a))           ; [x]   => vect x
+              ;                        (else       (fix 'hcat a))))         ; [x y] => hcat x y
+              ;                (else               (fix 'vcat a))))         ; [x;y] => vcat x y
+              ;        (else                       (fixcat 'ncat dims a)))) ; [x;;y] => ncat dims x y
         (case t
           ((#\; #\newline)
             (or gotnewline (take-token s))
@@ -1887,9 +1907,11 @@
                                       ((> semicolon-count max-level) (cons 1 dims)) ; new dimension, extend dims
                                       ((= semicolon-count max-level) (head1+ dims)) ; new member of max dimension, increment
                                       (else                          dims)))        ; no change
-                     ; collect the new values into a row on first new semicolon, if row length > 1
-                     (set! a (cond ((and (= semicolon-count 1) (> rown 1)) (cons '() (fixrow a)))
-                                   (else                                   a)))
+                     ; collect the new values into a row on first new semicolon, if more than item in this row
+                     (set! a (cond ((= semicolon-count 1)
+                                     (cond ((> (length (car a)) 1) (cons '() (fixrow a)))
+                                           (else                   (cons '() (cons (caar a) (cdr a))))))
+                                   (else                           a)))
                      (set! max-level (max max-level semicolon-count))
                      (parse-matrix-inner s a dims rown semicolon-count max-level closer #f))))
           ((#\,)
