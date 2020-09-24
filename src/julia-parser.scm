@@ -1846,51 +1846,45 @@
      `(comprehension ,gen))))
 
 (define (parse-matrix s first closer gotnewline last-end-symbol)
-  (define (fix head v)
-    (cons head (reverse v)))
-  (define (fixrow l)
-    (let ((lfix (fix 'row (car l))))
-      (cons lfix (cdr l))))
-  (define (fixcat head dims v)
-    (cons head (cons (cons 'tuple dims) (reverse v))))
-  (define (head1+ l) 
-    (cons (1+ (car l)) (cdr l)))
+  (define (fix-vect a)        (cons 'vect (reverse a)))                             ; fix accumulator into a vect
+  (define (fix-row a)         (cons 'row  (reverse a)))                             ; fix accumulator into a row
+  (define (fix-hcat a)        (cons 'hcat (reverse a)))                             ; convert row to hcat
+  (define (fix-vcat a)        (cons 'vcat (reverse a)))                             ; fix accumulator into a vcat
+  (define (fix-ncat n a)      (cons 'ncat (cons n (reverse a))))                    ; fix accumulator into a 1-d ncat
+  (define (fix-vncat dims a)  (cons 'vncat (cons (cons 'tuple dims) (reverse a))))  ; fix accumulator into a vncat
+  (define (head1+ l)          (cons (1+ (car l)) (cdr l)))                          ; increment the head of a list
+  (define (ncons i v l)       (cond ((<= i 0) l)                                    ; prepend an element v to list l i times
+                                    (else     (ncons (1- i) v (cons v l)))))
+  (define (fix-level n a)     (cond ((= n 0) ; only occurs on closing
+                                      (cond ((= (length a) 1) (fix-vect a))     ; [x]    => vect x
+                                            (else             (fix-hcat a))))   ; [x y]  => hcat x y
+                                    ((= n 1)                  (fix-row a))
+                                    ((= n 2)                  (fix-vcat a))     ; [x;y]  => vcat x y
+                                    (else                     (fix-ncat n a)))) ; [x;;y] => ncat n x y
+  (define (collapse-level n a)
+    (let ((ah (cond ((= (length (car a)) 1) (caar a))
+                    (else                   (fix-level n (car a))))))
+      (case (length a)
+        ((1)  (cons (cons ah '()) '()))
+        ((2)  (cons (cons ah (cadr a)) '()))
+        (else (cons (cons ah (cadr a)) (cddr a))))))
+  (define (collapse-levels a i)
+    (cond ((= (length a) 1) a)
+          (else             (collapse-levels (collapse-level i a) (1+ i)))))
   (define (parse-matrix-inner s a dims rown semicolon-count max-level closer gotnewline)
     (let ((t (cond ((or gotnewline (eqv? (peek-token s) #\newline)) #\newline)
                    (else                                            (require-token s)))))
       (if (eqv? t closer)
         (begin (take-token s)
-               (set! dims (reverse (cond ((< semicolon-count max-level) (head1+ dims)) ; if hadn't reached a final semicolon, increment needed
-                                         (else                          dims))))
-               (set! a (cond ((= semicolon-count 0) 
-                               (cond ((> (length (car a)) 1) (fixrow a))                ; hcat present, fix accumulated values into row
-                                     (else                   (cons (caar a) (cdr a))))) ; move remaining value in head accumulator into tail
-                             (else                           (cdr a))))                 ; remove null added in anticipation of next set
-               ;(error (string a " | " dims " | " rown " | " max-level " | " semicolon-count))
-
-
-              ;  (set! a (cond ((= semicolon-count 0) 
-              ;                  (cond ((> (length (car a)) 1) (fixrow a))
-              ;                         (else                  (cons (caar a) (cdr a)))))
-              ;                ((> semicolon-count 0)          (cdr a))
-              ;                (())
-
-
-              ;  (set! a (cond ((or (= rown 1) (= max-level 0))  (car a))       ; no rows or row vector
-              ;                ((= semicolon-count 0)            (fixrow a))    ; last values haven't been fixed yet
-              ;                (else                             (cdr a))))     ; null was added in anticipation of new item
-
-               (cond ((= max-level 0)
-                        (cond ((= rown 1) (fix 'vect a))
-                              (else       (fix 'hcat (reverse (cdar a))))))   ; strip row symbol
-                     ((= max-level 1)     (fix 'vcat a))
-                     (else                (fixcat 'ncat dims a))))
-              ;  (cond ((= (length dims) 1) ; only > 1 if 3rd dimension seen
-              ;          (cond ((= max-level 0)
-              ;                  (cond ((= rown 1) (fix 'vect a))           ; [x]   => vect x
-              ;                        (else       (fix 'hcat a))))         ; [x y] => hcat x y
-              ;                (else               (fix 'vcat a))))         ; [x;y] => vcat x y
-              ;        (else                       (fixcat 'ncat dims a)))) ; [x;;y] => ncat dims x y
+               ; treat closer as if it brought semicolon-count up to max-level
+               (if (< semicolon-count max-level)
+                 (set! dims (head1+ dims)))
+               (if (<= semicolon-count max-level)
+                 (set! a (car (collapse-levels a (1+ semicolon-count)))))
+               (if (= max-level 0) 
+                 (set! a (fix-level 0 a))
+                 (set! a (fix-level (1+ max-level) a)))
+               (error (string a " | " dims " | " rown " | " max-level " | " semicolon-count)))
         (case t
           ((#\; #\newline)
             (or gotnewline (take-token s))
@@ -1903,15 +1897,10 @@
                      ; append row length to dimension list if we have reached a 3rd dimension (only used for 3+)
                      (if (and (= semicolon-count 2) (= max-level 1))
                        (set! dims (cons rown dims)))
-                     (set! dims (cond ((= max-level 0)               (list 1))      ; first semicolon
-                                      ((> semicolon-count max-level) (cons 1 dims)) ; new dimension, extend dims
+                     (set! dims (cond ((> semicolon-count max-level) (cons 1 dims)) ; new dimension, extend dims
                                       ((= semicolon-count max-level) (head1+ dims)) ; new member of max dimension, increment
                                       (else                          dims)))        ; no change
-                     ; collect the new values into a row on first new semicolon, if more than item in this row
-                     (set! a (cond ((= semicolon-count 1)
-                                     (cond ((> (length (car a)) 1) (cons '() (fixrow a)))
-                                           (else                   (cons '() (cons (caar a) (cdr a))))))
-                                   (else                           a)))
+                     (set! a (collapse-level semicolon-count a))
                      (set! max-level (max max-level semicolon-count))
                      (parse-matrix-inner s a dims rown semicolon-count max-level closer #f))))
           ((#\,)
@@ -1927,14 +1916,15 @@
                      (parse-comprehension s (caar a) closer))
               (error "invalid comprehension syntax")))
           (else
+            (set! a (ncons semicolon-count '() a)) ; replenish accumulators for closed levels
             (let ((u (parse-eq* s)))
-              (set! a (cons (cons u (car a)) (cdr a)))
-              ; increment count of row elements only before first semicolon reached
-              (set! rown (cond ((= max-level 0) (1+ rown))
-                               (else            rown)))
-              (parse-matrix-inner s a dims rown 0 max-level closer #f)))))))
+              (set! a (cons (cons u (car a)) (cdr a))))
+            ; increment count of row elements only before first semicolon reached
+            (set! rown (cond ((= max-level 0) (1+ rown))
+                             (else            rown)))
+            (parse-matrix-inner s a dims rown 0 max-level closer #f))))))
   (with-bindings ((end-symbol last-end-symbol))
-    (parse-matrix-inner s (cons (list first) '()) (list 1) 1 0 0 closer gotnewline)))
+    (parse-matrix-inner s (cons (cons first '()) '()) '() 1 0 0 closer gotnewline)))
 
 (define (expect-space-before s t)
   (if (not (ts:space? s))
