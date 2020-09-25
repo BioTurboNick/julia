@@ -2364,47 +2364,47 @@
        (if (any assignment? a)
            (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
        (if (has-parameters? a)
-           (error "unexpected semicolon in array expression")
-           (expand-forms
-            (if (any (lambda (x)
-                       (and (pair? x) (eq? (car x) 'row)))
-                     a)
-                ;; convert nested hcat inside vcat to hvcat
-                (let ((rows (map (lambda (x)
-                                   (if (and (pair? x) (eq? (car x) 'row))
-                                       (cdr x)
-                                       (list x)))
-                                 a)))
-                  `(call (top hvcat)
-                         (tuple ,.(map length rows))
-                         ,.(apply append rows)))
-                `(call (top vcat) ,@a))))))
+           (error "unexpected semicolon in array expression"))
+       (expand-forms
+         (if (any (lambda (x)
+                   (and (pair? x) (eq? (car x) 'row)))
+                   a)
+           ;; convert nested hcat inside vcat to hvcat
+           (let ((rows (map (lambda (x)
+                             (if (and (pair? x) (eq? (car x) 'row))
+                               (cdr x)
+                               (list x)))
+                             a)))
+              `(call (top hvcat)
+                     (tuple ,.(map length rows))
+                     ,.(apply append rows)))
+            `(call (top vcat) ,@a)))))
 
    'ncat
    (lambda (e)
-     (let ((n (cadr e)))
-       (let ((a (cddr e)))
-         (if (any assignment? a)
-           (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
-         (if (has-parameters? a)
-           (error "unexpected semicolon in array expression")
-           (expand-forms
-             (if (any (lambda (x)
-                           (and (pair? x) (eq? (car x) 'row)))
-                         a)
-              ;; convert nested hcat inside ncat to hvncat
-              (let ((rows (map (lambda (x)
-                                  (if (and (pair? x) (eq? (car x) 'row))
-                                      (cdr x)
-                                      (list x)))
-                                a)))
-                  `(call (top hvncat)
-                         ,n
-                         (tuple ,.(map length rows))
-                         ,.(apply append rows)))
-              `(call (top vncat)
-                     ,n
-                     ,@a)))))))
+     (let ((n (cadr e))
+           (a (cddr e)))
+       (if (any assignment? a)
+         (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
+       (if (has-parameters? a)
+         (error "unexpected semicolon in array expression"))
+       (expand-forms
+         `(call (top _cat) ,n ,@a))))
+
+   'ncatd
+   (lambda (e)
+     (let ((d (cadr e))
+           (a (cddr e)))
+       (if (any assignment? a)
+         (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
+       (if (has-parameters? a)
+         (error "unexpected semicolon in array expression"))
+       (expand-forms
+         `(call (top _cat) ,(1- (length d)) ,@a))))
+                ; 1 dive down into the arguments list
+                ; 2 if each level has the number of elements matching its dimension and either vcat or row (but not both) present => extract all values and splat them with a dimension argument
+                ; 3 otherwise, leave as nested calls to cat()
+
 
    'typed_hcat
    (lambda (e)
@@ -2440,23 +2440,18 @@
         (let ((n (car na))
               (a (cdr na)))
           (if (any assignment? (cddr e))
-           (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
-           (expand-forms
-             (if (any (lambda (x)
-                       (and (pair? x) (eq? (car x) 'row)))
-                     a)
-                 ;; convert nested hcat inside vcat to hvcat
-                 (let ((rows (map (lambda (x)
-                                   (if (and (pair? x) (eq? (car x) 'row))
-                                       (cdr x)
-                                       (list x)))
-                                 a)))
-                   `(call (top typed_hvncat) ,t
-                         ,n
-                         ,.(apply append rows)))
-              `(call (top typed_hvncat) ,t
-                     ,n
-                     ,@a))))))
+            (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
+          (expand-forms `(call (top _cat_t) ,n ,t ,@a)))))
+    
+    'typed_ncatd
+    (lambda (e)
+      (let ((t (cadr e))
+            (da (cddr e)))
+        (let ((d (car da))
+              (a (cdr da)))
+          (if (any assignment? (cddr e))
+            (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
+          (expand-forms `(call (top _cat_t) ,(1- (length d)) ,t ,@a)))))
 
    '|'|  (lambda (e) (expand-forms `(call (top adjoint) ,(cadr e))))
 

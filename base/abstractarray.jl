@@ -2162,6 +2162,12 @@ nextblock(d, i) # get the offset to the ith block in dth dimension
 
 
 
+The thing is, it's probably lower overhead to get the parser to figure out the cat operations. But it only needs to do so
+when an array is present. If it's all numbers, it can just fill an array in one call if it knows the dimensions.
+
+I'm seeing 50 allocations for my method vs. 30 for chained cats. But maybe mine scales with dimensions better? (probably not)
+
+
 
  =#
 
@@ -2185,20 +2191,20 @@ function typed_hvncat(::Type{T}, structure::Tuple{Vararg{Any, N}}, as::AbstractA
     return typed_hvncat(T, lastdim, structure, as)::Array{T, lastdim}
 end
 
-typed_hvncat(::Type{T}, d::Int, structure::Tuple{Tuple{Vararg{Any, N}}}, as::Tuple{Vararg{AbstractArray, M}}) where T where N = typed_hvncat(T, structure[1], as...)
-typed_hvncat(::Type{T}, d::Int, structure::Tuple{Vararg{Int, N}}, as::Tuple{Vararg{AbstractArray, M}}) where T where N = typed_hvcat(T, structure, as...)
+typed_hvncat(::Type{T}, d::Int, structure::Tuple{Tuple{Vararg{Any, N}}}, as::Tuple{Vararg{AbstractArray, M}}) where T where N where M = typed_hvncat(T, structure[1], as...)
+typed_hvncat(::Type{T}, d::Int, structure::Tuple{Vararg{Int, N}}, as::Tuple{Vararg{AbstractArray, M}}) where T where N where M = Base.typed_hvcat(T, structure, as...)
 
 function typed_hvncat(::Type{T}, d::Int, structure::Tuple{Vararg{Any, N}}, as::Tuple{Vararg{AbstractArray, M}}) where T where N where M
     ai = 1
-    A = Vector{AbstractArray}()
+    A = Vector{AbstractArray}(undef, N)
     @inbounds for i = 1:N
         # calculate how many are in this next slice
         acount = typed_hvncat_blocksum(structure[i])
         alast = ai + acount - 1
-        A = tuple(A..., typed_hvncat(T, d - 1, structure[i], as[ai:alast]...))
+        A[i] = typed_hvncat(T, d - 1, structure[i], as[ai:alast])
         ai += acount
     end
-    _cat_t(d, T, A...)
+    Base._cat_t(d, T, A...)::Array{T, d}
 end
 
 vncat(dims::Tuple{Vararg{Int}}, xs::AbstractVecOrMat...) = typed_vncat(promote_eltype(xs...), dims, xs...)
@@ -2225,7 +2231,7 @@ function typed_vncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, xs::Number...) wher
     a
 end
 
-function typed_vncat_getblocks(dims::Tuple{Vararg{Int, N}}, d::Int, , as::AbstractArray...) where N where M
+function typed_vncat_getblocks(dims::Tuple{Vararg{Int, N}}, d::Int, as::AbstractArray...) where N where M
     blocks = ()
     nd = 0 # cannonical new dimension
     ai = 1 # position within as collection

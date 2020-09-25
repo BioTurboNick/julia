@@ -1213,6 +1213,8 @@
                           (loop (list* 'typed_comprehension ex (cdr al))))
                          ((ncat)
                           (loop (list* 'typed_ncat ex (cdr al))))
+                         ((ncatd)
+                          (loop (list* 'typed_ncatd ex (cdr al))))
                          (else (error "unknown parse-cat result (internal error)")))))))
             ((|.|)
              (disallow-space s ex t)
@@ -1846,21 +1848,21 @@
      `(comprehension ,gen))))
 
 (define (parse-matrix s first closer gotnewline last-end-symbol)
-  (define (fix-vect a)        (cons 'vect (reverse a)))                             ; fix accumulator into a vect
-  (define (fix-row a)         (cons 'row  (reverse a)))                             ; fix accumulator into a row
-  (define (fix-hcat a)        (cons 'hcat (reverse a)))                             ; convert row to hcat
-  (define (fix-vcat a)        (cons 'vcat (reverse a)))                             ; fix accumulator into a vcat
-  (define (fix-ncat n a)      (cons 'ncat (cons n (reverse a))))                    ; fix accumulator into a 1-d ncat
-  (define (fix-vncat dims a)  (cons 'vncat (cons (cons 'tuple dims) (reverse a))))  ; fix accumulator into a vncat
-  (define (head1+ l)          (cons (1+ (car l)) (cdr l)))                          ; increment the head of a list
-  (define (ncons i v l)       (cond ((<= i 0) l)                                    ; prepend an element v to list l i times
-                                    (else     (ncons (1- i) v (cons v l)))))
-  (define (fix-level n a)     (cond ((= n 0) ; only occurs on closing
-                                      (cond ((= (length a) 1) (fix-vect a))     ; [x]    => vect x
-                                            (else             (fix-hcat a))))   ; [x y]  => hcat x y
-                                    ((= n 1)                  (fix-row a))
-                                    ((= n 2)                  (fix-vcat a))     ; [x;y]  => vcat x y
-                                    (else                     (fix-ncat n a)))) ; [x;;y] => ncat n x y
+  (define (fix-vect a)     (cons 'vect (reverse a)))                             ; fix accumulator into a vect
+  (define (fix-row a)      (cons 'row  (reverse a)))                             ; fix accumulator into a row
+  (define (fix-hcat a)     (cons 'hcat (reverse a)))                             ; convert row to hcat
+  (define (fix-vcat a)     (cons 'vcat (reverse a)))                             ; fix accumulator into a vcat
+  (define (fix-ncat n a)   (cons 'ncat (cons n (reverse a))))                    ; fix accumulator into a 1-d ncat
+  (define (fix-ncatd d a)  (cons 'ncatd (cons (cons 'tuple (reverse d)) (reverse a))))     ; fix accumulator into an n-d ncat
+  (define (head1+ l)       (cons (1+ (car l)) (cdr l)))                          ; increment the head of a list
+  (define (ncons i v l)    (cond ((<= i 0) l)                                    ; prepend an element v to list l i times
+                                 (else     (ncons (1- i) v (cons v l)))))
+  (define (fix-level n a)  (cond ((= n 0) ; only occurs on closing
+                                   (cond ((= (length a) 1) (fix-vect a))         ; [x]    => vect x
+                                         (else             (fix-hcat a))))       ; [x y]  => hcat x y
+                                 ((= n 1)                  (fix-row a))
+                                 ((= n 2)                  (fix-vcat a))         ; [x;y]  => vcat x y
+                                 (else                     (fix-ncat n a))))     ; [x;;y] => ncat n x y
   (define (collapse-level n a)
     (let ((ah (cond ((= (length (car a)) 1) (caar a))
                     (else                   (fix-level n (car a))))))
@@ -1881,10 +1883,10 @@
                  (set! dims (head1+ dims)))
                (if (<= semicolon-count max-level)
                  (set! a (car (collapse-levels a (1+ semicolon-count)))))
-               (if (= max-level 0) 
-                 (set! a (fix-level 0 a))
-                 (set! a (fix-level (1+ max-level) a)))
-               (error (string a " | " dims " | " rown " | " max-level " | " semicolon-count)))
+               (case max-level
+                 ((0)    (fix-level 0 a))
+                 ((1)    (fix-level 2 a))
+                 (else   (fix-ncatd dims a))))
         (case t
           ((#\; #\newline)
             (or gotnewline (take-token s))
