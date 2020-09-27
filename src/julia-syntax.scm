@@ -2371,10 +2371,10 @@
                    a)
            ;; convert nested hcat inside vcat to hvcat
            (let ((rows (map (lambda (x)
-                             (if (and (pair? x) (eq? (car x) 'row))
-                               (cdr x)
-                               (list x)))
-                             a)))
+                              (if (and (pair? x) (eq? (car x) 'row))
+                                (cdr x)
+                                (list x)))
+                              a)))
               `(call (top hvcat)
                      (tuple ,.(map length rows))
                      ,.(apply append rows)))
@@ -2391,7 +2391,7 @@
        (expand-forms
          `(call (top _cat) ,n ,@a))))
 
-   'ncatd
+   'ncatd ; specialization where number of elements are exactly specified by the dimensions
    (lambda (e)
      (let ((d (cadr e))
            (a (cddr e)))
@@ -2399,12 +2399,29 @@
          (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
        (if (has-parameters? a)
          (error "unexpected semicolon in array expression"))
-       (expand-forms
-         `(call (top _cat) ,(1- (length d)) ,@a))))
-                ; 1 dive down into the arguments list
-                ; 2 if each level has the number of elements matching its dimension and either vcat or row (but not both) present => extract all values and splat them with a dimension argument
-                ; 3 otherwise, leave as nested calls to cat()
+       ; 1. flatten a into atoms
+       ; 2. hvncat dims a...
+       `(call (top hvncat) ,d ,@a)))
 
+      ;  (if (any (lambda (x)
+      ;              (and (pair? x) (eq? (car x) 'row)))
+      ;              a)
+          
+      ;      ;; convert nested hcat inside vcat to hvcat
+      ;      (let ((rows (map (lambda (x)
+      ;                         (if (and (pair? x) (eq? (car x) 'row))
+      ;                           (cdr x)
+      ;                           (list x)))
+      ;                         a)))
+      ;         `(call (top hvncat)
+      ;                ,d
+      ;                (tuple ,.(map length rows))
+      ;                ,.(apply append rows)))
+      ;      `(call (top vncat) ,(1- (length d)) ,@a))))
+
+      ;  (error a)
+      ;  (expand-forms
+      ;    `(call (top _cat) ,(1- (length d)) ,@a))))
 
    'typed_hcat
    (lambda (e)

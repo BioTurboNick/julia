@@ -1873,6 +1873,30 @@
   (define (collapse-levels a i)
     (cond ((= (length a) 1) a)
           (else             (collapse-levels (collapse-level i a) (1+ i)))))
+  (define (is-regular? d a)
+    ; inspect the final parsed list to determine if it has a uniform structure (same number of elements per dimension)
+    (define (is-regular-level? v dn dt)
+      (define (all f v)
+        (cond ((null? v) #t)
+              (else      (and (f (car v)) (all f (cdr v))))))
+      (and (= dn (length v))
+           (all (lambda (x)
+                  (is-regular? dt x))
+                v)))
+    (if (null? d)
+      #t
+      (let ((di (length d)))                          ; current dimension index (1 and 2 swapped)
+        (let ((dn (cond ((= di 2) (cadr d))           ; current dimension count (1 and 2 must swap)
+                        (else     (car d))))
+              (dt (cond ((= di 2) (cons (car d) '())) ; remaining dimensions
+                        (else     (cdr d)))))
+          (cond ((atom? a)                                          (and (= dn 1) (is-regular? dt a)))   ; single value
+                ((symbol? (car a)) 
+                  (cond ((and (eqv? (car a) 'vcat) (= di 2))        (is-regular-level? (cdr a) dn dt))   ; vcat
+                        ((and (eqv? (car a) 'row)  (= di 1))        (is-regular-level? (cdr a) dn dt))   ; row
+                        ((and (eqv? (car a) 'ncat) (= di (cadr a))) (is-regular-level? (cddr a) dn dt))  ; ncat
+                        (else                                       (and (= dn 1) (is-regular? dt a))))) ; passthrough b/c 1-length dimension
+                (else                                               (is-regular-level? a dn dt)))))))    ; top-level list of slices
   (define (parse-matrix-inner s a dims rown semicolon-count max-level closer gotnewline)
     (let ((t (cond ((or gotnewline (eqv? (peek-token s) #\newline)) #\newline)
                    (else                                            (require-token s)))))
@@ -1886,7 +1910,10 @@
                (case max-level
                  ((0)    (fix-level 0 a))
                  ((1)    (fix-level 2 a))
-                 (else   (fix-ncatd dims a))))
+                 (else    
+                   (if (is-regular? dims a)
+                     (fix-ncatd dims a)
+                     (fix-level (1+ max-level) a)))))
         (case t
           ((#\; #\newline)
             (or gotnewline (take-token s))
