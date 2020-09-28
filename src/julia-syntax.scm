@@ -2393,36 +2393,24 @@
 
    'ncatd ; specialization where number of elements are exactly specified by the dimensions
    (lambda (e)
+     (define (flatten v a) ; pull all elements into a single array, stripped of symbols, added to accumulator
+       (cond ((null? v)                                a)
+             ((symbol? (car v))                                                                 ; v is a nested op, strip elements and continue
+               (cond ((memv (car v) (list 'vcat 'row)) (flatten (cdr v) a))
+                     ((eqv? (car v) 'ncat)             (flatten (cddr v) a))
+                     (else                             (error "unknown symbol"))))
+             ((atom? (car v))                          (flatten (cdr v) (cons (car v) a)))      ; v is a cons of numbers
+             (else                                     (flatten (cdr v) (flatten (car v) a))))) ; v is a cons of operations
      (let ((d (cadr e))
            (a (cddr e)))
        (if (any assignment? a)
          (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
        (if (has-parameters? a)
          (error "unexpected semicolon in array expression"))
-       ; 1. flatten a into atoms
-       ; 2. hvncat dims a...
-       `(call (top hvncat) ,d ,@a)))
-
-      ;  (if (any (lambda (x)
-      ;              (and (pair? x) (eq? (car x) 'row)))
-      ;              a)
-          
-      ;      ;; convert nested hcat inside vcat to hvcat
-      ;      (let ((rows (map (lambda (x)
-      ;                         (if (and (pair? x) (eq? (car x) 'row))
-      ;                           (cdr x)
-      ;                           (list x)))
-      ;                         a)))
-      ;         `(call (top hvncat)
-      ;                ,d
-      ;                (tuple ,.(map length rows))
-      ;                ,.(apply append rows)))
-      ;      `(call (top vncat) ,(1- (length d)) ,@a))))
-
-      ;  (error a)
-      ;  (expand-forms
-      ;    `(call (top _cat) ,(1- (length d)) ,@a))))
-
+       (set! a (reverse (flatten a '())))
+       (expand-forms
+         `(call (top hvncat) ,d ,@a))))
+  
    'typed_hcat
    (lambda (e)
      (if (any assignment? (cddr e))
