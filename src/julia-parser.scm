@@ -1892,11 +1892,13 @@
                         (else     (cdr d)))))
           (cond ((atom? a)                                          (and (= dn 1) (is-regular? dt a)))   ; single value
                 ((symbol? (car a)) 
-                  (cond ((and (eqv? (car a) 'vcat) (= di 2))        (is-regular-level? (cdr a) dn dt))   ; vcat
-                        ((and (eqv? (car a) 'row)  (= di 1))        (is-regular-level? (cdr a) dn dt))   ; row
-                        ((and (eqv? (car a) 'ncat) (= di (cadr a))) (is-regular-level? (cddr a) dn dt))  ; ncat
-                        (else                                       (and (= dn 1) (is-regular? dt a))))) ; passthrough b/c 1-length dimension
-                (else                                               (is-regular-level? a dn dt)))))))    ; top-level list of slices
+                  (cond ((memv (car a) (list 'vcat 'row 'ncat))
+                          (cond ((and (eqv? (car a) 'vcat) (= di 2))        (is-regular-level? (cdr a) dn dt))   ; vcat
+                                ((and (eqv? (car a) 'row)  (= di 1))        (is-regular-level? (cdr a) dn dt))   ; row
+                                ((and (eqv? (car a) 'ncat) (= di (cadr a))) (is-regular-level? (cddr a) dn dt))  ; ncat
+                                (else                                       (and (= dn 1) (is-regular? dt a))))) ; passthrough b/c 1-length dimension
+                        (else                                               (= (length a) dn))))                 ; list of symbols
+                (else                                                       (is-regular-level? a dn dt)))))))    ; top-level list of slices
   (define (parse-matrix-inner s a dims rown semicolon-count max-level closer gotnewline)
     (let ((t (cond ((or gotnewline (eqv? (peek-token s) #\newline)) #\newline)
                    (else                                            (require-token s)))))

@@ -2450,13 +2450,24 @@
     
     'typed_ncatd
     (lambda (e)
-      (let ((t (cadr e))
+      ; appears in both ncatd and typed_ncatd, not sure best place to put it to reduce code duplication
+      (define (flatten v a) ; pull all elements into a single array, stripped of symbols, added to accumulator
+       (cond ((null? v)                                a)
+             ((symbol? (car v))                                                                 ; v is a nested op, strip elements and continue
+               (cond ((memv (car v) (list 'vcat 'row)) (flatten (cdr v) a))
+                     ((eqv? (car v) 'ncat)             (flatten (cddr v) a))
+                     (else                             (flatten (cdr v) (cons (car v) a)))))    ; v is not an array operation, append and continue
+             ((atom? (car v))                          (flatten (cdr v) (cons (car v) a)))      ; v is a cons of numbers
+             (else                                     (flatten (cdr v) (flatten (car v) a))))) ; v is a cons of operations
+     (let ((t (cadr e))
             (da (cddr e)))
         (let ((d (car da))
               (a (cdr da)))
-          (if (any assignment? (cddr e))
-            (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
-          (expand-forms `(call (top _cat_t) ,(1- (length d)) ,t ,@a)))))
+         (if (any assignment? a)
+           (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
+         (set! a (reverse (flatten a '())))
+         (expand-forms
+           `(call (top typed_hvncat) ,t ,d ,@a)))))
 
    '|'|  (lambda (e) (expand-forms `(call (top adjoint) ,(cadr e))))
 
