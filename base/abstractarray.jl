@@ -1942,364 +1942,46 @@ function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T
     T[rs...;]
 end
 
+# nd concatenation
 
-#=
+hvncat(dims::Tuple{Vararg{Int}}) = []
+hvncat(dims::Tuple{Vararg{Int, 1}}, xs...) = vcat(xs...)
+hvncat(dims::Tuple{Vararg{Int, 2}}, xs...) = hvcat(ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
 
-Thinking through n-d cats more:
-
-Parser could wrap in nested tuples
-
-[ a b c; d e ;; f ;;; g ;; h;;;]
-
-
-semicolon-count
-  0 0 01 0 0 12 0 123 0 12 01233
-
-current-level = most recent level
-  0 0 01 1 1 12 2 223 3 33 22223
-  on a semicolon, if the next token is not a semicolon, set to semicolon-count
-
-max-level
-  0 0 01 1 1 12 2 223 3 33 33333
-  on a semicolon, set to the max of itself and the semicolon-count
-
-
-((a))                                                                                         (0 0 0
-((b a))                                                                                       (0 0 0
-((c b a))                                                                                     (0 0 0)
-(()       (c b a)) - first semicolon                                                          (1 0 0) semicolon-count == 1 : cat it to the head of the tail
-((d)      (c b a))                                                                            (0 1 1)
-((e d)    (c b a))                                                                            (0 1 1)
-(()       (e d) (c b a)) - first semicolon (add front to back)                                (1 1 1) semicolon-count == 1 : cat it to the head of the tail
-(()       ((e d) (c b a))) - second semicolon (wrap back)                                     (2 1 1) semicolon-count > max-level && current-level == max-level: wrap everything in the tail
-((f)      ((e d) (c b a))))                                                                   (0 2 2)
-(()       (f) ((e d) (c b a))) - first semicolon (add front to back)                          (1 2 2) semicolon-count == 1 : cat it to the head of the tail
-(()       ((f)) ((e d) (c b a))) - second semicolon (wrap front of back)                      (2 2 2) 
-(()       (((f)) ((e d) (c b a)))) - third semicolon (wrap back)                              (3 2 2) semicolon-count > max-level && current-level == max-level
-((g)      (((f)) ((e d) (c b a))))                                                            (0 3 3)
-(()       (g) (((f)) ((e d) (c b a))))) - first semicolon (add front to back)                 (1 3 3) semicolon-count == 1 : cat it to the head of the tail
-(()       ((g)) (((f)) ((e d) (c b a))))) - second semicolon (wrap front of back)             (2 3 3) semicolon-count 
-((h)      ((g)) (((f)) ((e d) (c b a)))))                                                     (0 2 3)
-(()       (h) ((g)) (((f)) ((e d) (c b a)))))) - first semicolon (add front to back)          (1 2 3) semicolon-count == 1 : cat it to the head of the tail
-(()       ((h)) ((g)) (((f)) ((e d) (c b a)))))) - second semicolon (wrap front of back)      (2 2 3) 
-(()       (((h)) ((g))) (((f)) ((e d) (c b a)))))) - third semicolon (wrap front two of back) (3 2 3)
-
-(1)                                                                                         (0 0 0
-(2)                                                                                       (0 0 0
-(3)                                                                                     (0 0 0)
-(0        3) - first semicolon                                                          (1 0 0) semicolon-count == 1 : cat it to the head of the tail
-(1        3)                                                                            (0 1 1)
-(2        3)                                                                            (0 1 1)
-(0        2 3) - first semicolon (add front to back)                                (1 1 1) semicolon-count == 1 : cat it to the head of the tail
-(0        (2 3)) - second semicolon (wrap back)                                     (2 1 1) semicolon-count > max-level && current-level == max-level: wrap everything in the tail
-(1        (2 3)))                                                                   (0 2 2)
-(0        1 (2 3)) - first semicolon (add front to back)                          (1 2 2) semicolon-count == 1 : cat it to the head of the tail
-(0        (1) (2 3)) - second semicolon (wrap front of back)                      (2 2 2) 
-(0        ((1) (2 3))) - third semicolon (wrap back)                              (3 2 2) semicolon-count > max-level && current-level == max-level
-(1        ((1) (2 3)))                                                            (0 3 3)
-(0        1 ((1) (2 3)))) - first semicolon (add front to back)                 (1 3 3) semicolon-count == 1 : cat it to the head of the tail
-(0        (1) ((1) (2 3)))) - second semicolon (wrap front of back)             (2 3 3) semicolon-count 
-(1        (1) ((1) (2 3))))                                                     (0 2 3)
-(0        1 (1) ((1) (2 3))))) - first semicolon (add front to back)          (1 2 3) semicolon-count == 1 : cat it to the head of the tail
-(0        (1) (1) ((1) (2 3))))) - second semicolon (wrap front of back)      (2 2 3) 
-(0        ((1) (1)) ((1) (2 3))))) - third semicolon (wrap front two of back) (3 2 3)
-
-use linear splatted tuple for the values, but this for the structure of those linear values.; reverse, obviously
-
-    rows::Tuple{Vararg{Tuple}}
-
-
-
-
-
-fallback method: convert to nested cats
- - recurse into the tail, adding fix hvcat and cat dims argument
-
-
-specializations:
- - only 1 current-level seen: single-dimensional cat, just need to know the dimension along which to work
- - all members are the same size: any dimension, just need to know the dimensions of the containers
- - members are all different sizes: recurse into the tuples to populate the array, which provide the information on sizes
-   without having to compute them.
- - for the hcat part... may need a rows argument?
-
-
-=#
-
-
-#=
-[a a;
- a a;;
-
- a a;
- a a;;;
-
-
- a a;
- a a;;
-
- a a;
- a a]
-
-
-[b b;
- b b;;
-
- b b;
- b b;;;
-
-
- b b;
- b b;;
-
- b b;
- b b]
-
-vcat:
-
-[a a;
- a a;
- b b;
- b b;;
-
- a a;
- a a;
- b b;
- b b;;;
-
- a a;
- a a;
- b b;
- b b;;
-
- a a;
- a a;
- b b;
- b b]
-
- a a b b a a b b a a b b a a b b a a b b a a b b a a b b a a b b
-
-hcat:
-
-[a a b b;
- a a b b;;
-
- a a b b;
- a a b b;;;
-
- a a b b;
- a a b b;;
-
- a a b b;
- a a b b]
-
- a a a a b b b b a a a a b b b b a a a a b b b b a a a a b b b b
-
-
-3cat:
-
-[a a;
- a a;;
-
- a a;
- a a;;
-
- b b;
- b b;
-
- b b;
- b b;;;
-
- a a;
- a a;;
-
- a a;
- a a;;
-
- b b;
- b b;
-
- b b;
- b b;;;
-
- a a a a a a a a b b b b b b b b a a a a a a a a b b b b b b b b
-
-4cat:
-
-[a a;
- a a;;
-
- a a;
- a a;;;
-
-
- a a;
- a a;;
-
- a a;
- a a;;;
-
- b b;
- b b;;
-
- b b;
- b b;;;
-
-
- b b;
- b b;;
-
- b b;
- b b]
-
- a a a a a a a a a a a a a a a a b b b b b b b b b b b b b b b b
-
-
-
-
-nextblock(d, i) # get the offset to the ith block in dth dimension
-
-
-
-
-The thing is, it's probably lower overhead to get the parser to figure out the cat operations. But it only needs to do so
-when an array is present. If it's all numbers, it can just fill an array in one call if it knows the dimensions.
-
-I'm seeing 50 allocations for my method vs. 30 for chained cats. But maybe mine scales with dimensions better? (probably not)
-
-
-
- =#
-
-
-@inline function typed_hvncat_blocksum(structure::Tuple) where N
-    sum = 0
-    for i = 1:length(structure)
-        sum += typed_hvncat_blocksum(structure[i])
-    end
-    sum
-end
-@inline typed_hvncat_blocksum(structure::Int) = structure
-
-@inline typed_hvncat_getdims(structure::Tuple) where N = typed_hvncat_getdims(structure[1]) + 1
-@inline typed_hvncat_getdims(row::Int) = 2
-
-# Dive down into structure until reaching Tuple{Vararg{Int}} - this is an hvcat.
-
-function typed_hvncat(::Type{T}, structure::Tuple{Vararg{Any, N}}, as::AbstractArray...) where T where N
-    lastdim = typed_hvncat_getdims(structure)
-    return typed_hvncat(T, lastdim, structure, as)::Array{T, lastdim}
-end
-
-typed_hvncat(::Type{T}, d::Int, structure::Tuple{Tuple{Vararg{Any, N}}}, as::Tuple{Vararg{AbstractArray, M}}) where T where N where M = typed_hvncat(T, structure[1], as...)
-typed_hvncat(::Type{T}, d::Int, structure::Tuple{Vararg{Int, N}}, as::Tuple{Vararg{AbstractArray, M}}) where T where N where M = Base.typed_hvcat(T, structure, as...)
-
-function typed_hvncat(::Type{T}, d::Int, structure::Tuple{Vararg{Any, N}}, as::Tuple{Vararg{AbstractArray, M}}) where T where N where M
-    ai = 1
-    A = Vector{AbstractArray}(undef, N)
-    @inbounds for i = 1:N
-        # calculate how many are in this next slice
-        acount = typed_hvncat_blocksum(structure[i])
-        alast = ai + acount - 1
-        A[i] = typed_hvncat(T, d - 1, structure[i], as[ai:alast])
-        ai += acount
-    end
-    Base._cat_t(d, T, A...)::Array{T, d}
-end
-
-vncat(dims::Tuple{Vararg{Int}}, xs::AbstractVecOrMat...) = typed_vncat(promote_eltype(xs...), dims, xs...)
-vncat(dims::Tuple{Vararg{Int}}, xs::AbstractVecOrMat{T}...) where {T} = typed_vncat(T, dims, xs...)
-
-vncat(dims::Tuple{Vararg{Int}}) = []
-vncat(dims::Tuple{Vararg{Int, 1}}, xs...) = vcat(xs...)
-vncat(dims::Tuple{Vararg{Int, 2}}, xs...) = hvcat(ntuple(x->dims[2]), xs...)
-vncat(dims::Tuple{Vararg{Int, N}}, xs::T...) where T <:Number where N = typed_vncat(T, dims, xs...)
-
-vncat(dims::Tuple{Vararg{Int}}, xs::Number...) = typed_vncat(promote_typeof(xs...), dims, xs...)
-vncat(dims::Tuple{Vararg{Int}}, xs...) = typed_vncat(promote_eltypeof(xs...), dims, xs...)
-
-typed_vncat(::Type{T}, dims::Tuple{Vararg{Int, 1}}, xs...) where T = typed_vcat(T, xs...)
-typed_vncat(::Type{T}, dims::Tuple{Vararg{Int, 2}}, xs...) where T = typed_hvcat(T, ntuple(x->dims[2]), xs...)
-function typed_vncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, xs::Number...) where T where N
-    if prod(dims) != length(xs)
-        throw(ArgumentError("argument count $(length(xs)) does not match specified shape $(dims)"))
-    end
+function hvncat(dims::Tuple{Vararg{Int, N}}, xs::T...) where T<:Number where N #TODO
     a = Array{T, N}(undef, dims...)
-    for i = 1:length(a)
-        a[i] = xs[i]
+    if length(a) != length(xs)
+       throw(ArgumentError("argument count does not match specified shape (expected $(length(a)), got $(length(xs)))"))
+    end
+    hvncat_fill(a, xs...)
+end
+
+function hvncat_fill(a::Array{T, N}, xs...) where T where N
+    dims = size(a)
+    nr = dims[1]
+    nc = dims[2]
+    na = prod(dims[3:end])
+    k = 1
+    @inbounds for d=1:na
+        for i=1:nr
+            for j=1:nc
+                a[i+nr*(j-1)+nr*nc*(d-1)] = xs[k]
+                k += 1
+            end
+        end
     end
     a
 end
 
-function typed_vncat_getblocks(dims::Tuple{Vararg{Int, N}}, d::Int, as::AbstractArray...) where N where M
-    blocks = ()
-    nd = 0 # cannonical new dimension
-    ai = 1 # position within as collection
-    i = 1 # position within blocks
-    blockcount = 0
-    @inbounds while i ≤ dims[d]
-        nd += size(as[ai], d)
-        ai += 1
-        i += 1
-    end
-    blocks = tuple(ai - 1)
-    
-    # determine number of elements per block contributing to this dimension
-    @inbounds while ai ≤ length(as)
-        ndi = 0
-        blockcount = 0
-        while ndi < nd
-            ndi += size(as[ai], d)
-            blockcount += 1
-            ai += 1
-            i += 1
-        end
-        ndi == nd || ArgumentError("number of elements do not match along dimension $(d)") |> throw
-        blocks = tuple(blocks..., blockcount)
-    end
-    nd, blocks
-end
-
-function typed_vncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as::AbstractArray...) where T where N
-    nr, blocks = typed_vncat_getblocks(dims, 1, as...)
-
-    i = 0
-    ds = ()
-    for block ∈ blocks
-        dcat = vcat(as[(i+1):(i+block)]...)
-        ds = tuple(ds..., dcat)
-        i += block
-    end
-    as = ds
-
-    # for the second dimension, they must all be the same becase hcats not allowed
-
-    nc = size(as[1], 2)
-    all(nc == size(a, 2) for a ∈ as) || ArgumentError("all rows must be the same length") |> throw
-
-    outdims = (nr, nc) 
-    for d=3:N
-        nd, blocks = typed_vncat_getblocks(dims, d, as...)
-        
-        outdims = (outdims..., nd)
-        i = 0
-        ds = ()
-        for block ∈ blocks
-            dcat = _cat_t(d, T, as[(i+1):(i+block)]...)
-            ds = tuple(ds..., dcat)
-            i += block
-        end
-        as = ds
-    end
-    return as[1]
-end
+hvncat(dims::Tuple{Vararg{Int}}, xs::Number...) = typed_hvncat(promote_typeof(xs...), dims, xs...)
+hvncat(dims::Tuple{Vararg{Int}}, xs...) = typed_hvncat(promote_eltypeof(xs...), dims, xs...)
 
 """
     hvncat(dims::Tuple{Vararg{Int}}, values...)
 
 Horizontal, vertical, and n-dimensional concatenation in one call. This function is called
 for block matrix syntax. The first argument specifies the number of arguments to
-concatenate in each block row.
+concatenate in each block row. Specialized for regular arrays.
 
 # Examples
 ```jldoctest
@@ -2340,30 +2022,68 @@ julia> [a b;; c d;; e f]
  5  6
 ```
 """
-hvncat(dims::Tuple{Vararg{Int}}, rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat...) = typed_hvncat(promote_eltype(xs...), dims, rows, xs...)
-hvncat(dims::Tuple{Vararg{Int}}, rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat{T}...) where {T} = typed_hvncat(T, dims, rows, xs...)
+hvncat(dims::Tuple{Vararg{Int}}, xs::Array...) = typed_hvncat(promote_eltype(xs...), dims, xs...)
+hvncat(dims::Tuple{Vararg{Int}}, xs::Array{T}...) where {T} = typed_hvncat(T, dims, xs...)
 
-hvncat(dims::Tuple{Vararg{Int}}, rows::Tuple{Vararg{Int}}) = []
-hvncat(dims::Tuple{Vararg{Int, 1}}, rows::Tuple{Vararg{Int}}, xs...) = vcat(xs...)
-hvncat(dims::Tuple{Vararg{Int, 2}}, rows::Tuple{Vararg{Int}}, xs...) = hvcat(rows, xs...)
-hvncat(dims::Tuple{Vararg{Int, N}}, rows::Tuple{Vararg{Int}}, xs::T...) where T <:Number where N = typed_hvncat(T, dims, rows, xs...)
+function typed_hvncat(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMat...) where T #TODO********************************
+    nbr = length(rows)  # number of block rows
 
-hvncat(dims::Tuple{Vararg{Int}}, rows::Tuple{Vararg{Int}}, xs::Number...) = typed_hvncat(promote_typeof(xs...), dims, rows, xs...)
-hvncat(dims::Tuple{Vararg{Int}}, rows::Tuple{Vararg{Int}}, xs...) = typed_hvncat(promote_eltypeof(xs...), dims, rows, xs...)
-
-typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, 1}}, rows::Tuple{Vararg{Int}}, xs...) where T = typed_vcat(T, xs...)
-typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, 2}}, rows::Tuple{Vararg{Int}}, xs...) where T = typed_hvcat(T, rows, xs...)
-function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, rows::Tuple{Vararg{Int}}, xs::Number...) where T where N
-    if prod(dims) != length(xs)
-        throw(ArgumentError("argument count $(len) does not match specified shape $(dims)"))
+    nc = 0
+    for i=1:rows[1]
+        nc += size(as[i],2)
     end
-    hvncat_fill(Array{T, N}(undef, dims...), xs...)
+
+    nr = 0
+    a = 1
+    for i = 1:nbr
+        nr += size(as[a],1)
+        a += rows[i]
+    end
+
+    out = similar(as[1], T, nr, nc)
+
+    a = 1
+    r = 1
+    for i = 1:nbr
+        c = 1
+        szi = size(as[a],1)
+        for j = 1:rows[i]
+            Aj = as[a+j-1]
+            szj = size(Aj,2)
+            if size(Aj,1) != szi
+                throw(ArgumentError("mismatched height in block row $(i) (expected $szi, got $(size(Aj,1)))"))
+            end
+            if c-1+szj > nc
+                throw(ArgumentError("block row $(i) has mismatched number of columns (expected $nc, got $(c-1+szj))"))
+            end
+            out[r:r-1+szi, c:c-1+szj] = Aj
+            c += szj
+        end
+        if c != nc+1
+            throw(ArgumentError("block row $(i) has mismatched number of columns (expected $nc, got $(c-1))"))
+        end
+        r += szi
+        a += rows[i]
+    end
+    out
 end
 
-function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, rows::Tuple{Vararg{Int}}, as...) where T where N
-    na = prod(dims[3:end])
+typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int}}) where T = Vector{T}()
+typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, 1}}, xs...) where T = typed_vcat(T, xs...)
+typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, 2}}, xs...) where T = typed_hvcat(T, (ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
+
+function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, xs::Number...) where T where N
+    a = Array{T, N}(undef, dims...)
+    if length(a) != length(xs)
+       throw(ArgumentError("argument count does not match specified shape (expected $(length(a)), got $(length(xs)))"))
+    end
+    hvncat_fill(a, xs...)
+end
+
+function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as...) where T where N
     nr = dims[1]
     nc = dims[2]
+    na = prod(dims[3:end])
     a = Array{T, N}(undef, dims...)
     k = 1
     @inbounds for d = 1:na
@@ -2373,23 +2093,6 @@ function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, rows::Tuple{Vararg
             js = (i+jstart):nr:(i+jend)
             a[js] = typed_hcat(T, as[k:k-1+nc]...)
             k += nc
-        end
-    end
-    a
-end
-
-function hvncat_fill(a::Array{T, N}, xs...) where T where N
-    dims = size(a)
-    nc = dims[1]
-    nr = dims[2]
-    na = prod(dims[3:N])
-    k = 1
-    @inbounds for d=1:na
-        for i=1:nr
-            for j=1:nc
-                a[i+nr*(j-1)+nr*nc*(d-1)] = xs[k]
-                k += 1
-            end
         end
     end
     a
