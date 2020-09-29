@@ -2070,7 +2070,7 @@ end
 
 typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int}}) where T = Vector{T}()
 typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, 1}}, xs...) where T = typed_vcat(T, xs...)
-typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, 2}}, xs...) where T = typed_hvcat(T, (ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
+typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, 2}}, xs...) where T = typed_hvcat(T, ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
 
 function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, xs::Number...) where T where N
     a = Array{T, N}(undef, dims...)
