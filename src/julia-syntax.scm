@@ -2398,7 +2398,7 @@
              ((symbol? (car v))                                                                 ; v is a nested op, strip elements and continue
                (cond ((memv (car v) (list 'vcat 'row)) (flatten (cdr v) a))
                      ((eqv? (car v) 'ncat)             (flatten (cddr v) a))
-                     (else                             (error "unknown symbol"))))
+                     (else                             (flatten (cdr v) (cons (car v) a)))))    ; v is not an array operation, append and continue
              ((atom? (car v))                          (flatten (cdr v) (cons (car v) a)))      ; v is a cons of numbers
              (else                                     (flatten (cdr v) (flatten (car v) a))))) ; v is a cons of operations
      (let ((d (cadr e))
