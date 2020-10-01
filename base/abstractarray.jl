@@ -2022,50 +2022,58 @@ julia> [a b;; c d;; e f]
  5  6
 ```
 """
-hvncat(dims::Tuple{Vararg{Int}}, xs::Array...) = typed_hvncat(promote_eltype(xs...), dims, xs...)
-hvncat(dims::Tuple{Vararg{Int}}, xs::Array{T}...) where {T} = typed_hvncat(T, dims, xs...)
+hvncat(dims::Tuple{Vararg{Int}}, xs::AbstractArray...) = typed_hvncat(promote_eltype(xs...), dims, xs...)
+hvncat(dims::Tuple{Vararg{Int}}, xs::AbstractArray{T}...) where {T} = typed_hvncat(T, dims, xs...)
 
-function typed_hvncat(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMat...) where T #TODO********************************
-    nbr = length(rows)  # number of block rows
-
-    nc = 0
-    for i=1:rows[1]
-        nc += size(as[i],2)
+function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as::AT...) where T where N where AT <: AbstractArray
+    if prod(dims) != length(as)
+        throw(ArgumentError("argument count does not match specified shape (expected $(prod(dims)), got $(length(as)))"))
     end
+    # TODO: error handling for subarrays being too short or too long?
 
-    nr = 0
-    a = 1
-    for i = 1:nbr
-        nr += size(as[a],1)
-        a += rows[i]
-    end
-
-    out = similar(as[1], T, nr, nc)
-
-    a = 1
-    r = 1
-    for i = 1:nbr
-        c = 1
-        szi = size(as[a],1)
-        for j = 1:rows[i]
-            Aj = as[a+j-1]
-            szj = size(Aj,2)
-            if size(Aj,1) != szi
-                throw(ArgumentError("mismatched height in block row $(i) (expected $szi, got $(size(Aj,1)))"))
-            end
-            if c-1+szj > nc
-                throw(ArgumentError("block row $(i) has mismatched number of columns (expected $nc, got $(c-1+szj))"))
-            end
-            out[r:r-1+szi, c:c-1+szj] = Aj
-            c += szj
+    # compute final dims
+    newdims = zeros(Int, N)
+    factor = 1
+    @inbounds for d = (2,1,3:N...)
+        for j = 1:dims[d]
+            i = (j - 1) * factor + 1
+            newdims[d] += size(as[i], d)
         end
-        if c != nc+1
-            throw(ArgumentError("block row $(i) has mismatched number of columns (expected $nc, got $(c-1))"))
-        end
-        r += szi
-        a += rows[i]
+        factor *= dims[d]
     end
-    out
+
+    # copy into final array
+    A = Array{T, N}(undef, newdims...)
+
+    offsets = zeros(Int, N)
+    inneroffsets = zeros(Int, N)
+    @inbounds for a ∈ as
+        for i = eachindex(a)
+            Ai = inneroffsets[1] + offsets[1] + 1
+            for j = 2:N
+                increment = inneroffsets[j] + offsets[j]
+                for k = 1:j-1
+                    increment *= newdims[k]
+                end
+                Ai += increment
+            end
+
+            A[Ai] = a[i]
+
+            for j = 1:N
+                inneroffsets[j] += 1
+                inneroffsets[j] < size(a, j) && break
+                inneroffsets[j] = 0
+            end
+        end
+
+        for j = (2,1,3:N...)
+            offsets[j] += size(a, j)
+            offsets[j] < newdims[j] && break
+            offsets[j] = 0
+        end
+    end
+    A
 end
 
 typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int}}) where T = Vector{T}()
