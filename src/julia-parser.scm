@@ -1948,6 +1948,11 @@
               (error "invalid comprehension syntax")))
           (else
             (set! a (ncons semicolon-count '() a)) ; replenish accumulators for closed levels
+            (if (and (pair? (car a)) (not (ts:space? s)))
+                 (error (string "expected \"" closer "\" or separator in arguments to \""
+                                (if (eqv? closer #\]) #\[ #\{) " " closer
+                                "\"; got \""
+                                (deparse (caar a)) t "\"")))
             (let ((u (parse-eq* s)))
               (set! a (cons (cons u (car a)) (cdr a))))
             ; increment count of row elements only before first semicolon reached
