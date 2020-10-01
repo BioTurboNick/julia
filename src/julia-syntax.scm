@@ -2410,7 +2410,7 @@
        (set! a (reverse (flatten a '())))
        (expand-forms
          `(call (top hvncat) ,d ,@a))))
-  
+
    'typed_hcat
    (lambda (e)
      (if (any assignment? (cddr e))
@@ -2447,7 +2447,7 @@
           (if (any assignment? (cddr e))
             (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
           (expand-forms `(call (top _cat_t) ,n ,t ,@a)))))
-    
+
     'typed_ncatd
     (lambda (e)
       ; appears in both ncatd and typed_ncatd, not sure best place to put it to reduce code duplication
