@@ -2469,7 +2469,7 @@
          (expand-forms
            `(call (top typed_hvncat) ,t ,d ,@a)))))
 
-   '|'|  (lambda (e) (expand-forms `(call (top adjoint) ,(cadr e))))
+   '|'|  (lambda (e) (expand-forms `(call |'| ,(cadr e))))
 
    'generator
    (lambda (e)
