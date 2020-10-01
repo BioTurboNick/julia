@@ -1945,10 +1945,22 @@ end
 # nd concatenation
 
 hvncat(dims::Tuple{Vararg{Int}}) = []
-hvncat(dims::Tuple{Vararg{Int, 1}}, xs...) = vcat(xs...)
-hvncat(dims::Tuple{Vararg{Int, 2}}, xs...) = hvcat(ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
+# creates ambiguity
+#hvncat(dims::Tuple{Vararg{Int, 1}}, xs...) = vcat(xs...)
+#hvncat(dims::Tuple{Vararg{Int, 2}}, xs...) = hvcat(ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
+#hvncat(dims::Tuple{Vararg{Int}}, xs...) = typed_hvncat(promote_eltypeof(xs...), dims, xs...)
 
-function hvncat(dims::Tuple{Vararg{Int, N}}, xs::T...) where T<:Number where N #TODO
+function hvncat(dims::Tuple{Vararg{Int, N}}, xs...) where N
+    N == 1 && return vcat(xs...)
+    N == 2 && return hvcat(ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
+    return typed_hvncat(promote_eltypeof(xs...), dims, xs...)
+end
+
+hvncat(dims::Tuple{Vararg{Int}}, xs::Number...) = typed_hvncat(promote_typeof(xs...), dims, xs...)
+function hvncat(dims::Tuple{Vararg{Int, N}}, xs::T...) where T<:Number where N
+    N == 1 && return vcat(xs...)
+    N == 2 && return hvcat(ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
+
     a = Array{T, N}(undef, dims...)
     if length(a) != length(xs)
        throw(ArgumentError("argument count does not match specified shape (expected $(length(a)), got $(length(xs)))"))
@@ -1972,9 +1984,6 @@ function hvncat_fill(a::Array{T, N}, xs...) where T where N
     end
     a
 end
-
-hvncat(dims::Tuple{Vararg{Int}}, xs::Number...) = typed_hvncat(promote_typeof(xs...), dims, xs...)
-hvncat(dims::Tuple{Vararg{Int}}, xs...) = typed_hvncat(promote_eltypeof(xs...), dims, xs...)
 
 """
     hvncat(dims::Tuple{Vararg{Int}}, values...)
@@ -2023,9 +2032,12 @@ julia> [a b;; c d;; e f]
 ```
 """
 hvncat(dims::Tuple{Vararg{Int}}, xs::AbstractArray...) = typed_hvncat(promote_eltype(xs...), dims, xs...)
-hvncat(dims::Tuple{Vararg{Int}}, xs::AbstractArray{T}...) where {T} = typed_hvncat(T, dims, xs...)
+hvncat(dims::Tuple{Vararg{Int}}, xs::AbstractArray{T}...) where T = typed_hvncat(T, dims, xs...)
 
-function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as::AT...) where T where N where AT <: AbstractArray
+function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as::AbstractArray...) where T where N
+    N == 1 && return typed_vcat(T, xs...)
+    N == 2 && return typed_hvcat(T, ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
+
     if prod(dims) != length(as)
         throw(ArgumentError("argument count does not match specified shape (expected $(prod(dims)), got $(length(as)))"))
     end
@@ -2077,18 +2089,14 @@ function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as::AT...) where T
 end
 
 typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int}}) where T = Vector{T}()
-typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, 1}}, xs...) where T = typed_vcat(T, xs...)
-typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, 2}}, xs...) where T = typed_hvcat(T, ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
-
-function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, xs::Number...) where T where N
-    a = Array{T, N}(undef, dims...)
-    if length(a) != length(xs)
-       throw(ArgumentError("argument count does not match specified shape (expected $(length(a)), got $(length(xs)))"))
-    end
-    hvncat_fill(a, xs...)
-end
+# creates ambiguity
+#typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, 1}}, xs...) where T = typed_vcat(T, xs...)
+#typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, 2}}, xs...) where T = typed_hvcat(T, ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
 
 function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as...) where T where N
+    N == 1 && return typed_vcat(T, xs...)
+    N == 2 && return typed_hvcat(T, ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
+
     nr = dims[1]
     nc = dims[2]
     na = prod(dims[3:end])
@@ -2104,6 +2112,17 @@ function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as...) where T whe
         end
     end
     a
+end
+
+function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, xs::Number...) where T where N
+    N == 1 && return typed_vcat(T, xs...)
+    N == 2 && return typed_hvcat(T, ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
+
+    a = Array{T, N}(undef, dims...)
+    if length(a) != length(xs)
+       throw(ArgumentError("argument count does not match specified shape (expected $(length(a)), got $(length(xs)))"))
+    end
+    hvncat_fill(a, xs...)
 end
 
 ## Reductions and accumulates ##
