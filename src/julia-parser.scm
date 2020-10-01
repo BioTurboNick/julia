@@ -1891,7 +1891,7 @@
               (dt (cond ((= di 2) (cons (car d) '())) ; remaining dimensions
                         (else     (cdr d)))))
           (cond ((atom? a)                                          (and (= dn 1) (is-regular? dt a)))   ; single value
-                ((symbol? (car a)) 
+                ((symbol? (car a))
                   (cond ((memv (car a) (list 'vcat 'row 'ncat))
                           (cond ((and (eqv? (car a) 'vcat) (= di 2))        (is-regular-level? (cdr a) dn dt))   ; vcat
                                 ((and (eqv? (car a) 'row)  (= di 1))        (is-regular-level? (cdr a) dn dt))   ; row
@@ -1912,14 +1912,14 @@
                (case max-level
                  ((0)    (fix-level 0 a))
                  ((1)    (fix-level 2 a))
-                 (else    
+                 (else
                    (if (is-regular? dims a)
                      (fix-ncatd dims a)
                      (fix-level (1+ max-level) a)))))
         (case t
           ((#\; #\newline)
             (or gotnewline (take-token s))
-            (if (and (eqv? t #\newline)                                  
+            (if (and (eqv? t #\newline)
                      (or (memv (peek-token s) (list #\newline #\; 'for))
                          (> semicolon-count 0)))
               ; treat any number of line breaks not prior to a comprehension as a semicolon if semicolons absent
