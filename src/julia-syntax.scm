@@ -2393,21 +2393,12 @@
 
    'ncatd ; specialization where number of elements are exactly specified by the dimensions
    (lambda (e)
-     (define (flatten v a) ; pull all elements into a single array, stripped of symbols, added to accumulator
-       (cond ((null? v)                                a)
-             ((symbol? (car v))                                                                 ; v is a nested op, strip elements and continue
-               (cond ((memv (car v) (list 'vcat 'row)) (flatten (cdr v) a))
-                     ((eqv? (car v) 'ncat)             (flatten (cddr v) a))
-                     (else                             (flatten (cdr v) (cons (car v) a)))))    ; v is not an array operation, append and continue
-             ((atom? (car v))                          (flatten (cdr v) (cons (car v) a)))      ; v is a cons of numbers
-             (else                                     (flatten (cdr v) (flatten (car v) a))))) ; v is a cons of operations
      (let ((d (cadr e))
            (a (cddr e)))
        (if (any assignment? a)
          (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
        (if (has-parameters? a)
          (error "unexpected semicolon in array expression"))
-       (set! a (reverse (flatten a '())))
        (expand-forms
          `(call (top hvncat) ,d ,@a))))
 
@@ -2450,22 +2441,12 @@
 
     'typed_ncatd
     (lambda (e)
-      ; appears in both ncatd and typed_ncatd, not sure best place to put it to reduce code duplication
-      (define (flatten v a) ; pull all elements into a single array, stripped of symbols, added to accumulator
-       (cond ((null? v)                                a)
-             ((symbol? (car v))                                                                 ; v is a nested op, strip elements and continue
-               (cond ((memv (car v) (list 'vcat 'row)) (flatten (cdr v) a))
-                     ((eqv? (car v) 'ncat)             (flatten (cddr v) a))
-                     (else                             (flatten (cdr v) (cons (car v) a)))))    ; v is not an array operation, append and continue
-             ((atom? (car v))                          (flatten (cdr v) (cons (car v) a)))      ; v is a cons of numbers
-             (else                                     (flatten (cdr v) (flatten (car v) a))))) ; v is a cons of operations
      (let ((t (cadr e))
             (da (cddr e)))
         (let ((d (car da))
               (a (cdr da)))
          (if (any assignment? a)
            (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
-         (set! a (reverse (flatten a '())))
          (expand-forms
            `(call (top typed_hvncat) ,t ,d ,@a)))))
 

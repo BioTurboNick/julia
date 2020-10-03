@@ -1848,21 +1848,21 @@
      `(comprehension ,gen))))
 
 (define (parse-matrix s first closer gotnewline last-end-symbol)
-  (define (fix-vect a)     (cons 'vect (reverse a)))                             ; fix accumulator into a vect
-  (define (fix-row a)      (cons 'row  (reverse a)))                             ; fix accumulator into a row
-  (define (fix-hcat a)     (cons 'hcat (reverse a)))                             ; convert row to hcat
-  (define (fix-vcat a)     (cons 'vcat (reverse a)))                             ; fix accumulator into a vcat
-  (define (fix-ncat n a)   (cons 'ncat (cons n (reverse a))))                    ; fix accumulator into a 1-d ncat
-  (define (fix-ncatd d a)  (cons 'ncatd (cons (cons 'tuple (reverse d)) (reverse a))))     ; fix accumulator into an n-d ncat
-  (define (head1+ l)       (cons (1+ (car l)) (cdr l)))                          ; increment the head of a list
-  (define (ncons i v l)    (cond ((<= i 0) l)                                    ; prepend an element v to list l i times
+  (define (fix s a)        (cons s (reverse a)))             ; fix accumulator with a symbol
+  (define (fixn s x a)     (cons s (cons x (reverse a))))    ; fix accumulator with additional argument
+  (define (head1+ l)       (cons (1+ (car l)) (cdr l)))      ; increment the head of a list
+  (define (ncons i v l)    (cond ((<= i 0) l)                ; prepend an element v to list l i times
                                  (else     (ncons (1- i) v (cons v l)))))
-  (define (fix-level n a)  (cond ((= n 0) ; only occurs on closing
-                                   (cond ((= (length a) 1) (fix-vect a))         ; [x]    => vect x
-                                         (else             (fix-hcat a))))       ; [x y]  => hcat x y
-                                 ((= n 1)                  (fix-row a))
-                                 ((= n 2)                  (fix-vcat a))         ; [x;y]  => vcat x y
-                                 (else                     (fix-ncat n a))))     ; [x;;y] => ncat n x y
+  (define (fix-level n a) (cond ((= n 1) (fix 'row a))          ; [x y; ...] => row x y
+                                ((= n 2) (fix 'vrow a))         ; [x ; y ;; ...]  => vcat x y
+                                (else    (fixn 'nrow n a))))    ; [x ;; y ;;; ...] => ncat 3 x y
+  (define (fix-inner v) ; replace placeholders with nested syntax
+    (cond ((or (null? v) (atom? v))     v)                         ; v is a root element
+          ((symbol? (car v))                                       ; v is a nested vcat or ncat, replace head
+            (cond ((eqv? (car v) 'vrow) (cons 'vcat (cdr v)))
+                  ((eqv? (car v) 'nrow) (cons 'ncat (cdr v)))
+                  (else                 v)))                       ; v is not an inner array operation, return
+          (else                         (map (lambda (x) (fix-inner x '())) v)))) ; v is a cons
   (define (collapse-level n a)
     (let ((ah (cond ((= (length (car a)) 1) (caar a))
                     (else                   (fix-level n (car a))))))
@@ -1876,13 +1876,9 @@
   (define (is-regular? d a)
     ; inspect the final parsed list to determine if it has a uniform structure (same number of elements per dimension)
     (define (is-regular-level? v dn dt)
-      (define (all f v)
-        (cond ((null? v) #t)
-              (else      (and (f (car v)) (all f (cdr v))))))
-      (and (= dn (length v))
-           (all (lambda (x)
-                  (is-regular? dt x))
-                v)))
+      (define (all f v) (cond ((null? v) #t)
+                              (else      (and (f (car v)) (all f (cdr v))))))
+      (and (= dn (length v)) (all (lambda (x) (is-regular? dt x)) v)))
     (if (null? d)
       #t
       (let ((di (length d)))                          ; current dimension index (1 and 2 swapped)
@@ -1890,15 +1886,23 @@
                         (else     (car d))))
               (dt (cond ((= di 2) (cons (car d) '())) ; remaining dimensions
                         (else     (cdr d)))))
-          (cond ((atom? a)                                          (and (= dn 1) (is-regular? dt a)))   ; single value
+          (cond ((atom? a)                                                  (and (= dn 1) (is-regular? dt a)))   ; single value
                 ((symbol? (car a))
-                  (cond ((memv (car a) (list 'vcat 'row 'ncat))
-                          (cond ((and (eqv? (car a) 'vcat) (= di 2))        (is-regular-level? (cdr a) dn dt))   ; vcat
+                  (cond ((memv (car a) (list 'row 'vrow 'nrow))
+                          (cond ((and (eqv? (car a) 'vrow) (= di 2))        (is-regular-level? (cdr a) dn dt))   ; vrow
                                 ((and (eqv? (car a) 'row)  (= di 1))        (is-regular-level? (cdr a) dn dt))   ; row
-                                ((and (eqv? (car a) 'ncat) (= di (cadr a))) (is-regular-level? (cddr a) dn dt))  ; ncat
+                                ((and (eqv? (car a) 'nrow) (= di (cadr a))) (is-regular-level? (cddr a) dn dt))  ; nrow
                                 (else                                       (and (= dn 1) (is-regular? dt a))))) ; passthrough b/c 1-length dimension
                         (else                                               (= (length a) dn))))                 ; list of symbols
                 (else                                                       (is-regular-level? a dn dt)))))))    ; top-level list of slices
+  (define (flatten v a) ; pull all elements into a single cons, stripped of symbols, added to accumulator
+    (cond ((null? v)                                a)
+          ((symbol? (car v))                                                                 ; v is a nested op, strip elements and continue
+            (cond ((memv (car v) (list 'vrow 'row)) (flatten (cdr v) a))
+                  ((eqv? (car v) 'nrow)             (flatten (cddr v) a))
+                  (else                             (flatten (cdr v) (cons (car v) a)))))    ; v is not an array operation, append and continue
+          ((atom? (car v))                          (flatten (cdr v) (cons (car v) a)))      ; v is a cons of numbers
+          (else                                     (flatten (cdr v) (flatten (car v) a))))) ; v is a cons of operations
   (define (parse-matrix-inner s a dims rown semicolon-count max-level closer gotnewline)
     (let ((t (cond ((or gotnewline (eqv? (peek-token s) #\newline)) #\newline)
                    (else                                            (require-token s)))))
@@ -1909,13 +1913,12 @@
                  (set! dims (head1+ dims)))
                (if (<= semicolon-count max-level)
                  (set! a (car (collapse-levels a (1+ semicolon-count)))))
-               (case max-level
-                 ((0)    (fix-level 0 a))
-                 ((1)    (fix-level 2 a))
-                 (else
-                   (if (is-regular? dims a)
-                     (fix-ncatd dims a)
-                     (fix-level (1+ max-level) a)))))
+               (cond ((= max-level 0)
+                       (cond ((= (length a) 1) (fix 'vect a))         ; [x]    => vect x
+                             (else             (fix 'hcat a))))       ; [x y]  => hcat x y
+                     ((= max-level 1)          (fix 'vcat a))         ; [x;y]  => vcat x y
+                     ((is-regular? dims a)     (fixn 'ncatd (fix 'tuple dims) (flatten (reverse a) '())))
+                     (else                     (fix-inner (fix-level (1+ max-level) a))))) ; nested ncat/vcat
         (case t
           ((#\; #\newline)
             (or gotnewline (take-token s))
