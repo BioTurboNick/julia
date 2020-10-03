@@ -1854,15 +1854,13 @@
   (define (ncons i v l)    (cond ((<= i 0) l)                ; prepend an element v to list l i times
                                  (else     (ncons (1- i) v (cons v l)))))
   (define (fix-level n a) (cond ((= n 1) (fix 'row a))          ; [x y; ...] => row x y
-                                ((= n 2) (fix 'vrow a))         ; [x ; y ;; ...]  => vcat x y
                                 (else    (fixn 'nrow n a))))    ; [x ;; y ;;; ...] => ncat 3 x y
   (define (fix-inner v) ; replace placeholders with nested syntax
-    (cond ((or (null? v) (atom? v))     v)                         ; v is a root element
-          ((symbol? (car v))                                       ; v is a nested vcat or ncat, replace head
-            (cond ((eqv? (car v) 'vrow) (cons 'vcat (cdr v)))
-                  ((eqv? (car v) 'nrow) (cons 'ncat (cdr v)))
-                  (else                 v)))                       ; v is not an inner array operation, return
-          (else                         (map (lambda (x) (fix-inner x '())) v)))) ; v is a cons
+    (cond ((or (null? v) (atom? v)) v)                       ; v is a root element
+          ((eqv? (car v) 'nrow)                              ; v is a nested vcat or ncat, replace head
+            (cond ((= (cadr v) 2)   (cons 'vcat (cddr v)))
+                  (else             (cons 'ncat (cons (cadr v) (fix-inner (cddr v)))))))
+          (else                           (map (lambda (x) (fix-inner x)) v)))) ; v is a cons
   (define (collapse-level n a)
     (let ((ah (cond ((= (length (car a)) 1) (caar a))
                     (else                   (fix-level n (car a))))))
@@ -1888,21 +1886,20 @@
                         (else     (cdr d)))))
           (cond ((atom? a)                                                  (and (= dn 1) (is-regular? dt a)))   ; single value
                 ((symbol? (car a))
-                  (cond ((memv (car a) (list 'row 'vrow 'nrow))
-                          (cond ((and (eqv? (car a) 'vrow) (= di 2))        (is-regular-level? (cdr a) dn dt))   ; vrow
-                                ((and (eqv? (car a) 'row)  (= di 1))        (is-regular-level? (cdr a) dn dt))   ; row
+                  (cond ((memv (car a) (list 'row 'nrow))
+                          (cond ((and (eqv? (car a) 'row)  (= di 1))        (is-regular-level? (cdr a) dn dt))   ; row
                                 ((and (eqv? (car a) 'nrow) (= di (cadr a))) (is-regular-level? (cddr a) dn dt))  ; nrow
                                 (else                                       (and (= dn 1) (is-regular? dt a))))) ; passthrough b/c 1-length dimension
                         (else                                               (= (length a) dn))))                 ; list of symbols
                 (else                                                       (is-regular-level? a dn dt)))))))    ; top-level list of slices
   (define (flatten v a) ; pull all elements into a single cons, stripped of symbols, added to accumulator
-    (cond ((null? v)                                a)
-          ((symbol? (car v))                                                                 ; v is a nested op, strip elements and continue
-            (cond ((memv (car v) (list 'vrow 'row)) (flatten (cdr v) a))
-                  ((eqv? (car v) 'nrow)             (flatten (cddr v) a))
-                  (else                             (flatten (cdr v) (cons (car v) a)))))    ; v is not an array operation, append and continue
-          ((atom? (car v))                          (flatten (cdr v) (cons (car v) a)))      ; v is a cons of numbers
-          (else                                     (flatten (cdr v) (flatten (car v) a))))) ; v is a cons of operations
+    (cond ((null? v)                    a)
+          ((symbol? (car v))                                                     ; v is a nested op, strip elements and continue
+            (cond ((eqv? (car v) 'row)  (flatten (cdr v) a))
+                  ((eqv? (car v) 'nrow) (flatten (cddr v) a))
+                  (else                 (flatten (cdr v) (cons (car v) a)))))    ; v is not an array operation, append and continue
+          ((atom? (car v))              (flatten (cdr v) (cons (car v) a)))      ; v is a cons of numbers
+          (else                         (flatten (cdr v) (flatten (car v) a))))) ; v is a cons of operations
   (define (parse-matrix-inner s a dims rown semicolon-count max-level closer gotnewline)
     (let ((t (cond ((or gotnewline (eqv? (peek-token s) #\newline)) #\newline)
                    (else                                            (require-token s)))))
