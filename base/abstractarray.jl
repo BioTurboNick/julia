@@ -2034,54 +2034,116 @@ julia> [a b;; c d;; e f]
 hvncat(dims::Tuple{Vararg{Int}}, xs::AbstractArray...) = typed_hvncat(promote_eltype(xs...), dims, xs...)
 hvncat(dims::Tuple{Vararg{Int}}, xs::AbstractArray{T}...) where T = typed_hvncat(T, dims, xs...)
 
+
+#=
+
+testing
+a = Array{Int, 5}(undef, 2,3,2,4,5)
+b = Array{Int, 5}(undef, 1,1,2,4,5)
+c = Array{Int, 5}(undef, 1,2,2,4,5)
+d = Array{Int, 5}(undef, 1,1,1,4,5)
+e = Array{Int, 5}(undef, 1,1,1,4,5)
+f = Array{Int, 5}(undef, 1,1,1,4,5)
+g = Array{Int, 5}(undef, 2,3,1,4,5)
+h = Array{Int, 5}(undef, 3,3,3,1,2)
+i = Array{Int, 5}(undef, 3,2,3,3,2)
+j = Array{Int, 5}(undef, 3,1,3,3,2)
+
+a .= 1
+b .= 2
+c .= 3
+d .= 4
+e .= 5
+f .= 6
+g .= 7
+h .= 8
+i .= 9
+j .= 10
+
+[a; b c ;; d e f ; g ;;;; h ;;; i j]
+
+expected size = (3,3,3,4,7)
+
+typed_hvncat(Int64, (2,1,2,1,2), a, b, c, d, e, f, g, h, i, j)
+=#
+
 function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as::AbstractArray...) where T where N
     N == 1 && return typed_vcat(T, xs...)
     N == 2 && return typed_hvcat(T, ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
 
-    if prod(dims) != length(as)
-        throw(ArgumentError("argument count does not match specified shape (expected $(prod(dims)), got $(length(as)))"))
-    end
-    # TODO: error handling for subarrays being too short or too long?
+    # discover dimensions
+    nd = max(N, length(size(as[1])))
+    outdims = zeros(Int, nd)
 
-    # compute final dims
-    newdims = zeros(Int, N)
-    factor = 1
-    @inbounds for d = (2,1,3:N...)
-        for j = 1:dims[d]
-            i = (j - 1) * factor + 1
-            newdims[d] += size(as[i], d)
-        end
-        factor *= dims[d]
+    # discover number of columns
+    @inbounds for i = 1:dims[2]
+        outdims[2] += size(as[i], 2)
     end
+
+    currentdims = zeros(Int, nd)
+    blockcount = 0
+    @inbounds for i = eachindex(as)
+        currentdims[2] += size(as[i], 2)
+        if currentdims[2] == outdims[2]
+            currentdims[2] = 0
+            for d = (1, 3:nd...)
+                currentdims[d] += size(as[i], d)
+                if outdims[d] == 0 # unfixed dimension
+                    blockcount += 1
+                    if blockcount == (d > length(dims) ? 1 : dims[d]) # last expected member of dimension
+                        outdims[d] = currentdims[d]
+                        currentdims[d] = 0
+                        blockcount = 0
+                    else
+                        break
+                    end
+                else # fixed dimension
+                    if currentdims[d] == outdims[d] # end of dimension
+                        currentdims[d] = 0
+                    elseif currentdims[d] < outdims[d] # dimension in progress
+                        break
+                    else # exceeded dimension
+                        ArgumentError("Incompatible dimension in argument $(i) along axis $(d)") |> throw
+                    end
+                end
+            end
+        end
+    end
+
+    len = 0
+    for a = as
+        len += length(a)
+    end
+    len == prod(outdims) || ArgumentError("mismatch between length of inferred output dimensions and input arrays; expected $(prod(outdims)), got $(len)") |> throw
 
     # copy into final array
-    A = Array{T, N}(undef, newdims...)
+    A = Array{T, nd}(undef, outdims...)
 
-    offsets = zeros(Int, N)
-    inneroffsets = zeros(Int, N)
+    offsets = currentdims # should be zeroed out
+    inneroffsets = zeros(Int, nd)
     @inbounds for a ∈ as
         for i = eachindex(a)
             Ai = inneroffsets[1] + offsets[1] + 1
-            for j = 2:N
+            for j = 2:nd
                 increment = inneroffsets[j] + offsets[j]
                 for k = 1:j-1
-                    increment *= newdims[k]
+                    increment *= outdims[k]
                 end
                 Ai += increment
             end
 
             A[Ai] = a[i]
 
-            for j = 1:N
+            for j = 1:nd
                 inneroffsets[j] += 1
                 inneroffsets[j] < size(a, j) && break
                 inneroffsets[j] = 0
             end
         end
 
-        for j = (2,1,3:N...)
+        for j = (2,1,3:nd...)
             offsets[j] += size(a, j)
-            offsets[j] < newdims[j] && break
+            offsets[j] < outdims[j] && break
             offsets[j] = 0
         end
     end
