@@ -1857,6 +1857,7 @@
                                 (else    (fixn 'nrow n a))))    ; [x ;; y ;;; ...] => ncat 3 x y
   (define (fix-inner v) ; replace placeholders with nested syntax
     (cond ((or (null? v) (atom? v)) v)                       ; v is a root element
+          ((eqv? (car v) 'row)      (cons 'hcat (cdr v)))    ; v is a nested row (inside an ncat)
           ((eqv? (car v) 'nrow)                              ; v is a nested vcat or ncat, replace head
             (cond ((= (cadr v) 2)   (cons 'vcat (cddr v)))
                   (else             (cons 'ncat (cons (cadr v) (fix-inner (cddr v)))))))
