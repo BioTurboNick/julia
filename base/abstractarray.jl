@@ -2153,7 +2153,7 @@ typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int}}) where T = Vector{T}()
 
 function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as...) where T where N #TODO
     N == 1 && return typed_vcat(T, as...)
-    
+
     nr = dims[1]
     nc = dims[2]
     na = prod(dims[3:end])
