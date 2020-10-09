@@ -2036,7 +2036,6 @@ hvncat(dims::Tuple{Vararg{Int}}, xs::AbstractArray{T}...) where T = typed_hvncat
 
 
 #=
-
 testing
 a = Array{Int, 5}(undef, 2,3,2,4,5)
 b = Array{Int, 5}(undef, 1,1,2,4,5)
@@ -2156,8 +2155,8 @@ typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int}}) where T = Vector{T}()
 #typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, 2}}, xs...) where T = typed_hvcat(T, ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
 
 function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as...) where T where N
-    N == 1 && return typed_vcat(T, xs...)
-    N == 2 && return typed_hvcat(T, ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
+    N == 1 && return typed_vcat(T, as...)
+    N == 2 && return typed_hvcat(T, ntuple(x->dims[2], length(as) ÷ dims[2]), as...)
 
     nr = dims[1]
     nc = dims[2]
