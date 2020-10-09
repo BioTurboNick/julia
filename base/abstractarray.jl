@@ -1990,7 +1990,7 @@ end
 
 Horizontal, vertical, and n-dimensional concatenation in one call. This function is called
 for block matrix syntax. The first argument specifies the number of arguments to
-concatenate in each block row. Specialized for regular arrays.
+concatenate in each block row.
 
 # Examples
 ```jldoctest

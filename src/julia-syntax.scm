@@ -2382,17 +2382,6 @@
 
    'ncat
    (lambda (e)
-     (let ((n (cadr e))
-           (a (cddr e)))
-       (if (any assignment? a)
-         (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
-       (if (has-parameters? a)
-         (error "unexpected semicolon in array expression"))
-       (expand-forms
-         `(call (top _cat) ,n ,@a))))
-
-   'ncatd ; specialization where number of elements are exactly specified by the dimensions
-   (lambda (e)
      (let ((d (cadr e))
            (a (cddr e)))
        (if (any assignment? a)
@@ -2400,7 +2389,14 @@
        (if (has-parameters? a)
          (error "unexpected semicolon in array expression"))
        (expand-forms
-         `(call (top hvncat) ,d ,@a))))
+         (let ((rows (map (lambda (x)
+                            (if (and (pair? x) (eq? (car x) 'row))
+                              (cdr x)
+                              (list x)))
+                          a)))
+           `(call (top hvncat)
+                  ,d
+                  ,.(apply append rows))))))
 
    'typed_hcat
    (lambda (e)
@@ -2432,23 +2428,21 @@
     'typed_ncat
     (lambda (e)
       (let ((t (cadr e))
-            (na (cddr e)))
-        (let ((n (car na))
-              (a (cdr na)))
-          (if (any assignment? (cddr e))
-            (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
-          (expand-forms `(call (top _cat_t) ,n ,t ,@a)))))
-
-    'typed_ncatd
-    (lambda (e)
-     (let ((t (cadr e))
             (da (cddr e)))
         (let ((d (car da))
               (a (cdr da)))
-         (if (any assignment? a)
-           (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
-         (expand-forms
-           `(call (top typed_hvncat) ,t ,d ,@a)))))
+          (if (any assignment? (cddr e))
+            (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
+          (expand-forms
+            (let ((rows (map (lambda (x)
+                               (if (and (pair? x) (eq? (car x) 'row))
+                                 (cdr x)
+                                 (list x)))
+                             a)))
+              `(call (top typed_hvncat)
+                      ,t
+                      ,d
+                      ,.(apply append rows)))))))
 
    '|'|  (lambda (e) (expand-forms `(call |'| ,(cadr e))))
 

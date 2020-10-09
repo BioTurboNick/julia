@@ -240,16 +240,12 @@ julia> [[1 2;; 3 4];;; [5 6];; [7 8]]
 More generally, concatenation can be accomplished through the [`cat`](@ref) function.
 These syntaxes are shorthands for function calls that themselves are convenience functions:
 
-| Syntax            | Function                          | Description                                                                              |
-|:----------------- |:--------------------------------- |:---------------------------------------------------------------------------------------- |
-| `[A; B; C; ...]`  | [`vcat`](@ref)                    | shorthand for `cat(A...; dims=1)                                                         |
-| `[A B C ...]`     | [`hcat`](@ref)                    | shorthand for `cat(A...; dims=2)                                                         |
-| `[A B; C D; ...]` | [`hvcat`](@ref)                   | simultaneous vertical and horizontal concatenation                                       |
-| `[A;; B;; ...]`   | [`cat`](@ref) or [`hvncat`](@ref) | concatenate input arrays along dimension(s) `k`, where the number of semicolons is `k-1` |
-
-`hvncat` is faster for the special case where the number of elements being concatenated along
-each dimension is uniform across the other dimensions. e.g. `[x y ;; z]` maps to
-`cat(hcat(x, y), z, dims = 3)`, but `[x y ;; z w]` maps to `hvncat((1,2,2), x, y, z, w)`.
+| Syntax            | Function         | Description                                                                              |
+|:----------------- |:---------------- |:---------------------------------------------------------------------------------------- |
+| `[A; B; C; ...]`  | [`vcat`](@ref)   | shorthand for `cat(A...; dims=1)                                                         |
+| `[A B C ...]`     | [`hcat`](@ref)   | shorthand for `cat(A...; dims=2)                                                         |
+| `[A B; C D; ...]` | [`hvcat`](@ref)  | simultaneous vertical and horizontal concatenation                                       |
+| `[A;; B;; ...]`   | [`hvncat`](@ref) | concatenate input arrays along dimension(s) `k`, where the number of semicolons is `k-1` |
 
 ### Typed array literals
 
