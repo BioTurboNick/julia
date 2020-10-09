@@ -1853,7 +1853,7 @@
       (cons lfix (cdr l))))
   (define (fixcat head dims v)
     (cons head (cons (cons 'tuple dims) (reverse v))))
-  (define (head1+ l) 
+  (define (head1+ l)
     (cons (1+ (car l)) (cdr l)))
   (define (parse-matrix-inner s a dims rown semicolon-count max-level closer gotnewline)
     (let ((t (cond ((or gotnewline (eqv? (peek-token s) #\newline)) #\newline)
@@ -1862,7 +1862,7 @@
         (begin (take-token s)
                (set! dims (reverse (cond ((< semicolon-count max-level) (head1+ dims)) ; if hadn't reached a final semicolon, increment needed
                                          (else                          dims))))
-               (set! a (cond ((= semicolon-count 0) 
+               (set! a (cond ((= semicolon-count 0)
                                (cond ((> (length (car a)) 1) (fixrow a))                ; hcat present, fix accumulated values into row
                                      (else                   (cons (caar a) (cdr a))))) ; move remaining value in head accumulator into tail
                              (else                           (cdr a))))                 ; remove null added in anticipation of next set
@@ -1874,7 +1874,7 @@
         (case t
           ((#\; #\newline)
             (or gotnewline (take-token s))
-            (if (and (eqv? t #\newline)                                  
+            (if (and (eqv? t #\newline)
                      (or (memv (peek-token s) (list #\newline #\; 'for))
                          (> semicolon-count 0)))
               ; treat any number of line breaks not prior to a comprehension as a semicolon if semicolons absent

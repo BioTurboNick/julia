@@ -1947,7 +1947,6 @@ end
 hvncat(dims::Tuple{Vararg{Int}}) = []
 # creates ambiguity
 #hvncat(dims::Tuple{Vararg{Int, 1}}, xs...) = vcat(xs...)
-#hvncat(dims::Tuple{Vararg{Int, 2}}, xs...) = hvcat(ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
 #hvncat(dims::Tuple{Vararg{Int}}, xs...) = typed_hvncat(promote_eltypeof(xs...), dims, xs...)
 
 function hvncat(dims::Tuple{Vararg{Int, N}}, xs...) where N
@@ -2151,9 +2150,8 @@ end
 typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int}}) where T = Vector{T}()
 # creates ambiguity
 #typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, 1}}, xs...) where T = typed_vcat(T, xs...)
-#typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, 2}}, xs...) where T = typed_hvcat(T, ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
 
-function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as...) where T where N
+function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as...) where T where N #TODO
     N == 1 && return typed_vcat(T, as...)
     
     nr = dims[1]
