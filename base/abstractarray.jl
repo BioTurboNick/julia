@@ -2151,7 +2151,7 @@ typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int}}) where T = Vector{T}()
 # creates ambiguity
 #typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, 1}}, xs...) where T = typed_vcat(T, xs...)
 
-function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as...) where T where N #TODO
+function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as...) where T where N
     N == 1 && return typed_vcat(T, as...)
 
     nr = dims[1]
@@ -2173,7 +2173,6 @@ end
 
 function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, xs::Number...) where T where N
     N == 1 && return typed_vcat(T, xs...)
-    N == 2 && return typed_hvcat(T, ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
 
     a = Array{T, N}(undef, dims...)
     if length(a) != length(xs)
