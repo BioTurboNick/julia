@@ -2068,7 +2068,6 @@ typed_hvncat(Int64, (2,1,2,1,2), a, b, c, d, e, f, g, h, i, j)
 
 function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as::AbstractArray...) where T where N
     N == 1 && return typed_vcat(T, xs...)
-    N == 2 && return typed_hvcat(T, ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
 
     # discover dimensions
     nd = max(N, length(size(as[1])))
@@ -2156,8 +2155,7 @@ typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int}}) where T = Vector{T}()
 
 function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as...) where T where N
     N == 1 && return typed_vcat(T, as...)
-    N == 2 && return typed_hvcat(T, ntuple(x->dims[2], length(as) ÷ dims[2]), as...)
-
+    
     nr = dims[1]
     nc = dims[2]
     na = prod(dims[3:end])
