@@ -2153,6 +2153,7 @@ typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int}}) where T = Vector{T}()
 
 function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as...) where T where N
     N == 1 && return typed_vcat(T, as...)
+    any(x -> typeof(x) <: AbstractArray, as) && return _cat_t(length(dims), T, as...)
 
     nr = dims[1]
     nc = dims[2]
@@ -2180,6 +2181,7 @@ function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, xs::Number...) whe
     end
     hvncat_fill(a, xs...)
 end
+
 
 ## Reductions and accumulates ##
 
