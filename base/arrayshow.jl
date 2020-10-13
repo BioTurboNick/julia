@@ -290,7 +290,9 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, show_full::Bo
                             end
                         end
                         #println(io, idxs)
-                        print(io, "...\n\n")
+                        show_full || [print(io, ";") for i ∈ 1:i+1]
+                        print(io, " \u2026 ")
+                        show_full && print(io, "\n\n")
                         @goto skip
                     end
                     if ind[firstindex(ind)+2] < ii <= ind[end-3]
