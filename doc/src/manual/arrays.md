@@ -240,12 +240,13 @@ julia> [[1 2;; 3 4];;; [5 6];; [7 8]]
 More generally, concatenation can be accomplished through the [`cat`](@ref) function.
 These syntaxes are shorthands for function calls that themselves are convenience functions:
 
-| Syntax            | Function         | Description                                                                              |
-|:----------------- |:---------------- |:---------------------------------------------------------------------------------------- |
-| `[A; B; C; ...]`  | [`vcat`](@ref)   | shorthand for `cat(A...; dims=1)                                                         |
-| `[A B C ...]`     | [`hcat`](@ref)   | shorthand for `cat(A...; dims=2)                                                         |
-| `[A B; C D; ...]` | [`hvcat`](@ref)  | simultaneous vertical and horizontal concatenation                                       |
-| `[A;; B;; ...]`   | [`hvncat`](@ref) | concatenate input arrays along dimension(s) `k`, where the number of semicolons is `k-1` |
+| Syntax             | Function         | Description                                                                                 |
+|:------------------ |:---------------- |:------------------------------------------------------------------------------------------- |
+|                    | [`cat`](@ref)    | concatenate input arrays along dimension(s) `k`                                             |
+| `[A; B; C; ...]`   | [`vcat`](@ref)   | shorthand for `cat(A...; dims=1)                                                            |
+| `[A B C ...]`      | [`hcat`](@ref)   | shorthand for `cat(A...; dims=2)                                                            |
+| `[A B; C D; ...]`  | [`hvcat`](@ref)  | simultaneous vertical and horizontal concatenation                                          |
+| `[A B; C D;; ...]` | [`hvncat`](@ref) | simultaneous n-dimensional concatenation, where 2 or more semicolons indicate 3+ dimensions |
 
 ### Typed array literals
 
