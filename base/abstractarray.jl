@@ -2153,23 +2153,50 @@ typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int}}) where T = Vector{T}()
 
 function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as...) where T where N
     N == 1 && return typed_vcat(T, as...)
-    any(x -> typeof(x) <: AbstractArray, as) && return _cat_t(length(dims), T, as...)
 
-    nr = dims[1]
-    nc = dims[2]
-    na = prod(dims[3:end])
-    a = Array{T, N}(undef, dims...)
-    k = 1
-    @inbounds for d = 1:na
-        jstart = (d - 1)*nc*nr
-        jend = d*nc*nr - 1
-        for i = 1:nr
-            js = (i+jstart):nr:(i+jend)
-            a[js] = typed_hcat(T, as[k:k-1+nc]...)
-            k += nc
+    # strategy: concatenate stepwise from the lowest dimension to the highest
+
+    lowd = 0
+    for d = (2,1,(3:N)...)
+        if dims[d] > 1
+            lowd = d
+            break
         end
     end
-    a
+
+    lowd > 0 || return as[1]
+
+    inner_cat_t(d, args...) = d == 1 ? typed_vcat(args...) :
+                              d == 2 ? typed_hcat(args...) :
+                              _cat_t(d, args...)
+
+    blocks = Vector{Any}(undef, length(as))
+    nd = 0
+    outnd = 0
+    blockcount = 0
+    outpos = 1
+    start = 1
+    for a ∈ as
+        nd += typeof(a) <: AbstractArray ? size(a, lowd) : 1
+        blockcount += 1
+
+        if outnd == 0 && blockcount == dims[lowd] # learning current dimension
+            outnd = nd
+        end
+        if nd == outnd # end of current dimension
+            blocks[outpos] = inner_cat_t(lowd, T, as[start:(start + blockcount - 1)]...)
+            start += blockcount
+            blockcount = 0
+            nd = 0
+            outpos += 1
+        end
+    end
+
+    if lowd == N
+        return _cat_t(N, T, blocks[1:outpos-1]...)
+    else
+        return typed_hvncat(T, (dims[1:lowd-1]..., 1, dims[lowd+1:end]...), blocks[1:outpos-1]...)
+    end
 end
 
 function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, xs::Number...) where T where N
