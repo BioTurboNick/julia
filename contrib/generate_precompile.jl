@@ -15,9 +15,12 @@ UP_ARROW = "\e[A"
 DOWN_ARROW = "\e[B"
 
 hardcoded_precompile_statements = """
-# used by Revise.jl
+# used by JuliaInterpreter.jl and Revise.jl
 @assert precompile(Tuple{typeof(Base.parse_cache_header), String})
 @assert precompile(Tuple{typeof(pushfirst!), Vector{Any}, Function})
+@assert precompile(Tuple{typeof(push!), Set{Module}, Module})
+@assert precompile(Tuple{typeof(push!), Set{Method}, Method})
+@assert precompile(Tuple{typeof(empty!), Set{Any}})
 # used by Requires.jl
 @assert precompile(Tuple{typeof(get!), Type{Vector{Function}}, Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
 @assert precompile(Tuple{typeof(haskey), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
@@ -25,15 +28,20 @@ hardcoded_precompile_statements = """
 @assert precompile(Tuple{typeof(push!), Vector{Function}, Function})
 # miscellaneous
 @assert precompile(Tuple{typeof(Base.require), Base.PkgId})
+@assert precompile(Tuple{typeof(Base.recursive_prefs_merge), Base.Dict{String, Any}})
 @assert precompile(Tuple{typeof(isassigned), Core.SimpleVector, Int})
+@assert precompile(Tuple{typeof(getindex), Core.SimpleVector, Int})
 @assert precompile(Tuple{typeof(Base.Experimental.register_error_hint), Any, Type})
 """
 
 repl_script = """
 2+2
 print("")
+display([1])
+display([1 2; 3 4])
 @time 1+1
 ; pwd
+$CTRL_C
 ? reinterpret
 using Ra\t$CTRL_C
 \\alpha\t$CTRL_C
@@ -48,9 +56,6 @@ cd("complet_path\t\t$CTRL_C
 """
 
 precompile_script = """
-# Used by JuliaInterpreter
-push!(Set{Module}(), Main)
-push!(Set{Method}(), first(methods(collect)))
 # Used by Revise
 (setindex!(Dict{String,Base.PkgId}(), Base.PkgId(Base), "file.jl"))["file.jl"]
 (setindex!(Dict{Base.PkgId,String}(), "file.jl", Base.PkgId(Base)))[Base.PkgId(Base)]
@@ -166,7 +171,7 @@ function generate_precompile_statements()
               """)
         tmp = tempname()
         s = """
-            push!(DEPOT_PATH, $(repr(prec_path)));
+            pushfirst!(DEPOT_PATH, $(repr(prec_path)));
             Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp));
             Base.compilecache(Base.PkgId($(repr(pkgname))), $(repr(path)))
             $precompile_script
@@ -191,6 +196,7 @@ function generate_precompile_statements()
         p = withenv("JULIA_HISTORY" => blackhole,
                     "JULIA_PROJECT" => nothing, # remove from environment
                     "JULIA_LOAD_PATH" => Sys.iswindows() ? "@;@stdlib" : "@:@stdlib",
+                    "JULIA_PKG_PRECOMPILE_AUTO" => "0",
                     "TERM" => "") do
             run(```$(julia_exepath()) -O0 --trace-compile=$precompile_file --sysimage $sysimg
                    --cpu-target=native --startup-file=no --color=yes

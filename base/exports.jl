@@ -22,6 +22,8 @@ export
     AbstractVector,
     AbstractVecOrMat,
     Array,
+    AbstractMatch,
+    AbstractPattern,
     AbstractDict,
     BigFloat,
     BigInt,
@@ -227,6 +229,7 @@ export
     cbrt,
     ceil,
     cis,
+    cispi,
     clamp,
     cld,
     cmp,
@@ -465,6 +468,7 @@ export
 # linear algebra
     var"'", # to enable syntax a' for adjoint
     adjoint,
+    var"'ᵀ",
     transpose,
     kron,
     kron!,

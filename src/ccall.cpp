@@ -1014,7 +1014,11 @@ std::string generate_func_sig(const char *fname)
         else if (abi->use_sret((jl_datatype_t*)rt)) {
             AttrBuilder retattrs = AttrBuilder();
 #if !defined(_OS_WINDOWS_) // llvm used to use the old mingw ABI, skipping this marking works around that difference
+#if JL_LLVM_VERSION < 120000
             retattrs.addAttribute(Attribute::StructRet);
+#else
+            retattrs.addStructRetAttr(lrt);
+#endif
 #endif
             retattrs.addAttribute(Attribute::NoAlias);
             paramattrs.push_back(std::move(retattrs));
@@ -1833,12 +1837,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             bool f_extern = (strncmp(f_name, "extern ", 7) == 0);
             if (f_extern)
                 f_name += 7;
-            llvmf = jl_Module->getOrInsertFunction(f_name, functype)
-#if JL_LLVM_VERSION >= 90000
-                .getCallee();
-#else
-                ;
-#endif
+            llvmf = jl_Module->getOrInsertFunction(f_name, functype).getCallee();
             if (!f_extern && (!isa<Function>(llvmf) ||
                               cast<Function>(llvmf)->getIntrinsicID() ==
                                       Intrinsic::not_intrinsic)) {

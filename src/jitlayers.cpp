@@ -480,7 +480,7 @@ void JuliaOJIT::DebugObjectRegistrar::registerObject(RTDyldObjHandleT H, const O
     // in the primary hash table for the enclosing JIT
     for (auto &Symbol : Object->symbols()) {
 #if JL_LLVM_VERSION >= 110000
-        uint32_t Flags = Symbol.getFlags().get();
+        uint32_t Flags = cantFail(Symbol.getFlags());
 #else
         uint32_t Flags = Symbol.getFlags();
 #endif
@@ -523,6 +523,7 @@ static void addPassesForOptLevel(legacy::PassManager &PM, TargetMachine &TM, raw
 {
     addTargetPasses(&PM, &TM);
     addOptimizationPasses(&PM, optlevel);
+    addMachinePasses(&PM, &TM);
     if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
         llvm_unreachable("Target does not support MC emission.");
 }
@@ -870,6 +871,13 @@ std::string JuliaOJIT::getMangledName(const GlobalValue *GV)
     return getMangledName(GV->getName());
 }
 
+size_t getRTDyldMemoryManagerTotalBytes(RTDyldMemoryManager *mm);
+
+size_t JuliaOJIT::getTotalBytes() const
+{
+    return getRTDyldMemoryManagerTotalBytes(MemMgr.get());
+}
+
 JuliaOJIT *jl_ExecutionEngine;
 
 // destructively move the contents of src into dest
@@ -1105,4 +1113,10 @@ static uint64_t getAddressForFunction(StringRef fname)
 void add_named_global(StringRef name, void *addr)
 {
     jl_ExecutionEngine->addGlobalMapping(name, (uint64_t)(uintptr_t)addr);
+}
+
+extern "C" JL_DLLEXPORT
+size_t jl_jit_total_bytes(void)
+{
+    return jl_ExecutionEngine->getTotalBytes();
 }

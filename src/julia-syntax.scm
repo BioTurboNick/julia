@@ -105,7 +105,7 @@
   (if (null? tuples)
       (if (and last (= n 1))
           `(call (top firstindex) ,a)
-          `(call (top first) (call (top axes) ,a ,n)))
+          `(call (top firstindex) ,a ,n))
       (let ((dimno `(call (top +) ,(- n (length tuples))
                           ,.(map (lambda (t) `(call (top length) ,t))
                                  tuples))))
@@ -904,6 +904,7 @@
        (global ,name) (const ,name)
        (scope-block
         (block
+         (hardscope)
          (local-def ,name)
          ,@(map (lambda (v) `(local ,v)) params)
          ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
@@ -934,6 +935,7 @@
        ;; "inner" constructors
        (scope-block
         (block
+         (hardscope)
          (global ,name)
          ,@(map (lambda (c)
                   (rewrite-ctor c name params field-names field-types))
@@ -1430,7 +1432,8 @@
                 ,@(reverse after)
                 (unnecessary (tuple ,@(reverse elts))))
         (let ((L (car lhss))
-              (R (car rhss)))
+              ;; rhss can be null iff L is a vararg
+              (R (if (null? rhss) '() (car rhss))))
           (cond ((and (symbol-like? L)
                       (or (not (pair? R)) (quoted? R) (equal? R '(null)))
                       ;; overwrite var immediately if it doesn't occur elsewhere
@@ -1442,6 +1445,16 @@
                        (cons (make-assignment L R) stmts)
                        after
                        (cons R elts)))
+                ((vararg? L)
+                 (if (null? (cdr lhss))
+                     (let ((temp (make-ssavalue)))
+                       `(block ,@(reverse stmts)
+                               (= ,temp (tuple ,@rhss))
+                               ,@(reverse after)
+                               (= ,(cadr L) ,temp)
+                               (unnecessary (tuple ,@(reverse elts) (... ,temp)))))
+                     (error (string "invalid \"...\" on non-final assignment location \""
+                                    (cadr L) "\""))))
                 ((vararg? R)
                  (let ((temp (make-ssavalue)))
                    `(block ,@(reverse stmts)
@@ -1537,7 +1550,8 @@
                                            (lambda (name) (string "keyword argument \"" name
                                                                   "\" repeated in call to \"" (deparse fexpr) "\""))
                                            "keyword argument"
-                                           "keyword argument syntax"))
+                                           "keyword argument syntax"
+                                           #t))
       ,(if (every vararg? kw)
            (kwcall-unless-empty f pa kw-container kw-container)
            `(call (call (core kwfunc) ,f) ,kw-container ,f ,@pa)))))
@@ -1846,7 +1860,8 @@
 (define (lower-named-tuple lst
                            (dup-error-fn (lambda (name) (string "field name \"" name "\" repeated in named tuple")))
                            (name-str     "named tuple field")
-                           (syntax-str   "named tuple element"))
+                           (syntax-str   "named tuple element")
+                           (call-with-keyword-arguments? #f))
   (let* ((names (apply append
                        (map (lambda (x)
                               (cond ((symbol? x) (list x))
@@ -1915,6 +1930,8 @@
                          (if current
                              (merge current (cadr el))
                              `(call (top merge) (call (top NamedTuple)) ,(cadr el))))))
+                ((and call-with-keyword-arguments? (has-parameters? L))
+                 (error "more than one semicolon in argument list"))
                 (else
                  (error (string "invalid " syntax-str " \"" (deparse el) "\""))))))))
 
@@ -2066,35 +2083,61 @@
             (define (sides-match? l r)
               ;; l and r either have equal lengths, or r has a trailing ...
               (cond ((null? l)          (null? r))
+                    ((vararg? (car l))  #t)
                     ((null? r)          #f)
                     ((vararg? (car r))  (null? (cdr r)))
                     (else               (sides-match? (cdr l) (cdr r)))))
-            (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple)
+            (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple) (not (any assignment? (cdr x)))
+                     (not (has-parameters? (cdr x)))
                      (sides-match? lhss (cdr x)))
                 ;; (a, b, ...) = (x, y, ...)
                 (expand-forms
                  (tuple-to-assignments lhss x))
                 ;; (a, b, ...) = other
-                (let* ((xx  (if (or (and (symbol? x) (not (memq x lhss)))
-                                    (ssavalue? x))
-                                x (make-ssavalue)))
-                       (ini (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x)))))
-                       (n   (length lhss))
-                       (st  (gensy)))
-                  `(block
-                    (local ,st)
-                    ,@ini
-                    ,.(map (lambda (i lhs)
-                             (expand-forms
-                              (lower-tuple-assignment
-                               (if (= i (- n 1))
-                                   (list lhs)
-                                   (list lhs st))
-                               `(call (top indexed_iterate)
-                                      ,xx ,(+ i 1) ,.(if (eq? i 0) '() `(,st))))))
-                           (iota n)
-                           lhss)
-                    (unnecessary ,xx))))))
+                (begin
+                  ;; like memq, but if last element of lhss is (... sym),
+                  ;; check against sym instead
+                  (define (in-lhs? x lhss)
+                    (if (null? lhss)
+                        #f
+                        (let ((l (car lhss)))
+                          (cond ((and (pair? l) (eq? (car l) '|...|))
+                                 (if (null? (cdr lhss))
+                                     (eq? (cadr l) x)
+                                     (error (string "invalid \"...\" on non-final assignment location \""
+                                                    (cadr l) "\""))))
+                                ((eq? l x) #t)
+                                (else (in-lhs? x (cdr lhss)))))))
+                  ;; in-lhs? also checks for invalid syntax, so always call it first
+                  (let* ((xx  (if (or (and (not (in-lhs? x lhss)) (symbol? x))
+                                      (ssavalue? x))
+                                  x (make-ssavalue)))
+                         (ini (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x)))))
+                         (n   (length lhss))
+                         ;; skip last assignment if it is an all-underscore vararg
+                         (n   (if (> n 0)
+                                  (let ((l (last lhss)))
+                                    (if (and (vararg? l) (underscore-symbol? (cadr l)))
+                                        (- n 1)
+                                        n))
+                                  n))
+                         (st  (gensy)))
+                    `(block
+                      ,@(if (> n 0) `((local ,st)) '())
+                      ,@ini
+                      ,@(map (lambda (i lhs)
+                               (expand-forms
+                                 (if (vararg? lhs)
+                                     `(= ,(cadr lhs) (call (top rest) ,xx ,@(if (eq? i 0) '() `(,st))))
+                                     (lower-tuple-assignment
+                                       (if (= i (- n 1))
+                                           (list lhs)
+                                           (list lhs st))
+                                       `(call (top indexed_iterate)
+                                              ,xx ,(+ i 1) ,@(if (eq? i 0) '() `(,st)))))))
+                             (iota n)
+                             lhss)
+                      (unnecessary ,xx)))))))
          ((typed_hcat)
           (error "invalid spacing in left side of indexed assignment"))
          ((typed_vcat typed_ncat)
@@ -2265,7 +2308,13 @@
    'bracescat (lambda (e) (error "{ } matrix syntax is discontinued"))
 
    'string
-   (lambda (e) (expand-forms `(call (top string) ,@(cdr e))))
+   (lambda (e)
+     (expand-forms
+      `(call (top string) ,@(map (lambda (s)
+                                   (if (and (pair? s) (eq? (car s) 'string))
+                                       (cadr s)
+                                       s))
+                                 (cdr e)))))
 
    '|::|
    (lambda (e)
@@ -4089,7 +4138,7 @@ f(x) = yt(x)
             ((if elseif)
              (let ((tests (let* ((cond (cadr e))
                                  (cond (if (and (pair? cond) (eq? (car cond) 'block))
-                                           (begin (compile (butlast cond) break-labels #f #f)
+                                           (begin (if (length> cond 2) (compile (butlast cond) break-labels #f #f))
                                                   (last cond))
                                            cond)))
                             (map (lambda (clause)
@@ -4440,7 +4489,13 @@ f(x) = yt(x)
              (list ,@(cadr vi)) ,(caddr vi) (list ,@(cadddr vi)))
        ,@(cdddr lam))))
 
-(define (compact-ir body file line)
+(define (make-lineinfo name file line (inlined-at #f))
+  `(lineinfo (thismodule) ,(if inlined-at '|macro expansion| name) ,file ,line ,(or inlined-at 0)))
+
+(define (set-lineno! lineinfo num)
+  (set-car! (cddddr lineinfo) num))
+
+(define (compact-ir body name file line)
   (let ((code         '(block))
         (locs         '(list))
         (linetable    '(list))
@@ -4455,7 +4510,7 @@ f(x) = yt(x)
     (define (emit e)
       (if (and (null? (cdr linetable))
                (not (and (pair? e) (eq? (car e) 'meta))))
-          (begin (set! linetable (cons `(line ,line ,file) linetable))
+          (begin (set! linetable (cons (make-lineinfo name file line) linetable))
                  (set! current-loc 1)))
       (if (or reachable
               (and (pair? e) (memq (car e) '(meta inbounds gc_preserve_begin gc_preserve_end aliasscope popaliasscope))))
@@ -4469,22 +4524,22 @@ f(x) = yt(x)
                   ((eq? (car e) 'line)
                    (if (and (= current-line 0) (length= e 2) (pair? linetable))
                        ;; (line n) after push_loc just updates the line for the new file
-                       (begin (set-car! (cdr (car linetable)) (cadr e))
+                       (begin (set-lineno! (car linetable) (cadr e))
                               (set! current-line (cadr e)))
                        (begin
                          (set! current-line (cadr e))
                          (if (pair? (cddr e))
                              (set! current-file (caddr e)))
                          (set! linetable (cons (if (null? locstack)
-                                                   `(line ,current-line ,current-file)
-                                                   `(line ,current-line ,current-file ,(caar locstack)))
+                                                   (make-lineinfo name current-file current-line)
+                                                   (make-lineinfo name current-file current-line (caar locstack)))
                                                linetable))
                          (set! current-loc (- (length linetable) 1)))))
                   ((and (length> e 2) (eq? (car e) 'meta) (eq? (cadr e) 'push_loc))
                    (set! locstack (cons (list current-loc current-line current-file) locstack))
                    (set! current-file (caddr e))
                    (set! current-line 0)
-                   (set! linetable (cons `(line ,current-line ,current-file ,current-loc) linetable))
+                   (set! linetable (cons (make-lineinfo name current-file current-line current-loc) linetable))
                    (set! current-loc (- (length linetable) 1)))
                   ((and (length= e 2) (eq? (car e) 'meta) (eq? (cadr e) 'pop_loc))
                    (let ((l (car locstack)))
@@ -4519,7 +4574,9 @@ f(x) = yt(x)
     tbl))
 
 (define (renumber-lambda lam file line)
-  (let* ((stuff (compact-ir (lam:body lam) file line))
+  (let* ((stuff (compact-ir (lam:body lam)
+                            (if (null? (cadr lam)) '|top-level scope| 'none)
+                            file line))
          (code (aref stuff 0))
          (locs (aref stuff 1))
          (linetab (aref stuff 2))
