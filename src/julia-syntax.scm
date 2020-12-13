@@ -2443,6 +2443,10 @@
                               (cdr x)
                               (list x)))
                           a)))
+           (if (any (lambda (x)
+                      (and (pair? x) (pair? (car x)) (eq? (caar x) '...)))
+                    rows)
+             (error (string "Splatting ... in an hvncat is not supported")))
            `(call (top hvncat)
                   ,d
                   ,.(apply append rows))))))
@@ -2488,6 +2492,10 @@
                                  (cdr x)
                                  (list x)))
                              a)))
+              (if (any (lambda (x)
+                         (and (pair? x) (pair? (car x)) (eq? (caar x) '...)))
+                       rows)
+                (error (string "Splatting ... in an hvncat is not supported")))
               `(call (top typed_hvncat)
                       ,t
                       ,d
