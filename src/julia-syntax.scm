@@ -2443,7 +2443,8 @@
                               (cdr x)
                               (list x)))
                           a)))
-           (if (any (lambda (x) (any vararg? x)) rows)
+           (if (and (any (lambda (x) (any vararg? x)) rows)
+                    (any (lambda (x) (not (= x 1))) (cdr (reverse (cdr d))))) ; allow splats with 1 dimension concatenated
                 (error (string "Splatting ... in an hvncat is not supported")))
            `(call (top hvncat)
                   ,d
@@ -2490,7 +2491,8 @@
                                  (cdr x)
                                  (list x)))
                              a)))
-              (if (any (lambda (x) (any vararg? x)) rows)
+              (if (and (any (lambda (x) (any vararg? x)) rows)
+                       (any (lambda (x) (not (= x 1))) (cdr (reverse (cdr d))))) ; allow splats with 1 dimension concatenated
                 (error (string "Splatting ... in an hvncat is not supported")))
               `(call (top typed_hvncat)
                       ,t

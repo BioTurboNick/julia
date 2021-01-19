@@ -2004,10 +2004,15 @@ function hvncat(dims::Tuple{Vararg{Int, N}}, xs::T...) where T<:Number where N
     N == 1 && return vcat(xs...)
     N == 2 && return hvcat(ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
 
-    a = Array{T, N}(undef, dims...)
+    lastd = all(x -> x == 1, dims[1:(end - 1)]) ? # allow for splatting across last dimension
+        length(xs) :
+        dims[end]
+
+    a = Array{T, N}(undef, dims[1:(end - 1)]..., lastd)
     if length(a) != length(xs)
-       throw(ArgumentError("argument count does not match specified shape (expected $(length(a)), got $(length(xs)))"))
+        throw(ArgumentError("argument count does not match specified shape (expected $(length(a)), got $(length(xs)))"))
     end
+    
     hvncat_fill(a, xs...)
 end
 
@@ -2112,6 +2117,10 @@ typed_hvncat(Int64, (2,1,2,1,2), a, b, c, d, e, f, g, h, i, j)
 function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as::AbstractArray...) where T where N
     N == 1 && return typed_vcat(T, xs...)
 
+    if all(x -> x == 1, dims[1:(end - 1)]) # allow for splatting across last dimension
+        dims = (dims[1:(end - 1)]..., length(as))
+    end
+
     # discover dimensions
     nd = max(N, length(size(as[1])))
     outdims = zeros(Int, nd)
@@ -2154,7 +2163,7 @@ function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as::AbstractArray.
     len = 0
     for a = as
         len += length(a)
-    end
+    end    
     len == prod(outdims) || ArgumentError("mismatch between length of inferred output dimensions and input arrays; expected $(prod(outdims)), got $(len)") |> throw
 
     # copy into final array
