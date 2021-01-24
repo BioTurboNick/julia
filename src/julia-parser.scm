@@ -1857,8 +1857,8 @@
       (cons lfix (cdr l))))
   (define (unfix l)
     (cons (reverse (cdr (cadr l))) (cddr l) ))
-  (define (fixcat head dims v)
-    (cons head (cons (cons 'tuple dims) (reverse v))))
+  (define (fixcat head is-row-first dims v)
+    (cons head (cons is-row-first (cons (cons 'tuple dims) (reverse v)))))
   (define (head1+ l)
     (cons (1+ (car l)) (cdr l)))
   (define (parse-matrix-inner s a dims rown is-row-first semicolon-count max-level closer gotnewline gotlinesep)
@@ -1866,7 +1866,8 @@
                    (else                                            (require-token s)))))
       (if (eqv? t closer)
         (begin (take-token s)
-        ; TODO what happens when I get here and is-row-first is null or false? ***********************************************
+               (set! is-row-first (cond ((or (null? is-row-first) is-row-first) '(true)) ; convert #t/#f
+                                        (else                                   '(false))))
                (set! dims (reverse (cond ((< semicolon-count max-level) (head1+ dims)) ; if hadn't reached a final semicolon, increment needed
                                          (else                          dims))))
                ;(error (string a dims max-level semicolon-count))
@@ -1878,7 +1879,7 @@
                         (cond ((= rown 1) (fix 'vect a))
                               (else       (fix 'hcat (reverse (cdar a))))))   ; strip row symbol
                      ((= max-level 1)     (fix 'vcat a))
-                     (else                (fixcat 'ncat dims a))))
+                     (else                (fixcat 'ncat is-row-first dims a))))
         (case t
           ((#\; #\newline)
             (or gotnewline (take-token s))
@@ -1887,11 +1888,11 @@
                          (> semicolon-count 0)))
               (parse-matrix-inner s a dims rown is-row-first semicolon-count max-level closer #f gotlinesep) ; treat line breaks not prior to a comprehension as a semicolon if semicolons absent
               (begin (set! semicolon-count (1+ semicolon-count))
-                     (let ((is-line-sep (if (and (not (null? is-row-first)) is-row-first (= semicolon-count 2))
+                     (let ((is-line-sep (if (and (not (null? is-row-first)) is-row-first (= semicolon-count 2)) ; TODO: can I remove the null check?
                                           (let ((next (peek-token s)))
                                             (cond ((eqv? next #\newline)           #t)             ; [a b ;;<newline>...
                                                   ((not (or (eof-object? next) (eqv? next #\;)))   ; [a b ;;...
-                                                    (error "2 cannot mix space and ;; separators in an array expression, except to wrap a line"))
+                                                    (error "cannot mix space and ;; separators in an array expression, except to wrap a line"))
                                                   (else                            #f)))           ; [a b ;;<eof> for REPL,  [a ;;...
                                            #f)))                                                   ; [a ; b ;; c ; d...
                        (if is-line-sep
@@ -1904,6 +1905,8 @@
                                                  ((= semicolon-count max-level)                            (head1+ dims))    ; new member of max dimension, increment
                                                  (else                                                     dims)))           ; no change
                                 (set! max-level (max max-level semicolon-count))
+                                (if (and (null? is-row-first) (= semicolon-count 2) (not (eqv? (peek-token s) #\;))) ; finding ;; that isn't a row-separator makes it column-first
+                                  (set! is-row-first #f))
                                 ; collect the new values into a row on first new semicolon, if more than item in this row
                                 (set! a (cond ((= semicolon-count 1)
                                                 (cond ((> (length (car a)) 1) (cons '() (fixrow a)))

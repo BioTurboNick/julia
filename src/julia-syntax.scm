@@ -2431,23 +2431,26 @@
 
    'ncat
    (lambda (e)
-     (let ((d (cadr e))
-           (a (cddr e)))
-       (if (any assignment? a)
-         (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
-       (if (has-parameters? a)
-         (error "unexpected semicolon in array expression"))
-       (expand-forms
-         (let ((rows (map (lambda (x)
-                            (if (and (pair? x) (eq? (car x) 'row))
-                              (cdr x)
-                              (list x)))
-                          a)))
-           (if (any (lambda (x) (any vararg? x)) rows)
-                (error (string "Splatting ... in an hvncat is not supported")))
-           `(call (top hvncat)
-                  ,d
-                  ,.(apply append rows))))))
+     (let ((r (cadr e))
+           (da (cddr e)))
+       (let ((d (car da))
+             (a (cdr da)))
+         (if (any assignment? a)
+           (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
+         (if (has-parameters? a)
+           (error "unexpected semicolon in array expression"))
+         (expand-forms
+           (let ((rows (map (lambda (x)
+                              (if (and (pair? x) (eq? (car x) 'row))
+                                (cdr x)
+                                (list x)))
+                            a)))
+             (if (any (lambda (x) (any vararg? x)) rows)
+                  (error (string "Splatting ... in an hvncat is not supported")))
+             `(call (top hvncat)
+                    ,d
+                    ,r
+                    ,.(apply append rows)))))))
 
    'typed_hcat
    (lambda (e)
@@ -2479,23 +2482,25 @@
     'typed_ncat
     (lambda (e)
       (let ((t (cadr e))
-            (da (cddr e)))
-        (let ((d (car da))
-              (a (cdr da)))
-          (if (any assignment? (cddr e))
-            (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
-          (expand-forms
-            (let ((rows (map (lambda (x)
-                               (if (and (pair? x) (eq? (car x) 'row))
-                                 (cdr x)
-                                 (list x)))
-                             a)))
-              (if (any (lambda (x) (any vararg? x)) rows)
-                (error (string "Splatting ... in an hvncat is not supported")))
-              `(call (top typed_hvncat)
-                      ,t
-                      ,d
-                      ,.(apply append rows)))))))
+            (rda (cddr e)))
+        (let ((r (car rda))
+              (d (cadr rda))
+              (a (cddr rda)))
+            (if (any assignment? (cddr e))
+              (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
+            (expand-forms
+              (let ((rows (map (lambda (x)
+                                 (if (and (pair? x) (eq? (car x) 'row))
+                                   (cdr x)
+                                   (list x)))
+                               a)))
+                (if (any (lambda (x) (any vararg? x)) rows)
+                  (error (string "Splatting ... in an hvncat is not supported")))
+                `(call (top typed_hvncat)
+                        ,t
+                        ,d
+                        ,r
+                        ,.(apply append rows)))))))
 
    '|'|  (lambda (e) (expand-forms `(call |'| ,(cadr e))))
 
