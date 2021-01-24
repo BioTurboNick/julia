@@ -1883,7 +1883,7 @@
           ((#\; #\newline)
             (or gotnewline (take-token s))
             (if (and (eqv? t #\newline)
-                     (or (memv (peek-token s) (list #\newline #\; 'for))
+                     (or (memv (peek-token s) (list #\newline #\; 'for closer))
                          (> semicolon-count 0)))
               (parse-matrix-inner s a dims rown is-row-first semicolon-count max-level closer #f gotlinesep) ; treat line breaks not prior to a comprehension as a semicolon if semicolons absent
               (begin (set! semicolon-count (1+ semicolon-count))
