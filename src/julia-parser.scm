@@ -1855,6 +1855,8 @@
   (define (fixrow l)
     (let ((lfix (fix 'row (car l))))
       (cons lfix (cdr l))))
+  (define (unfix l)
+    (cons (reverse (cdr (cadr l))) (cddr l) ))
   (define (fixcat head dims v)
     (cons head (cons (cons 'tuple dims) (reverse v))))
   (define (head1+ l)
@@ -1867,6 +1869,7 @@
         ; TODO what happens when I get here and is-row-first is null or false? ***********************************************
                (set! dims (reverse (cond ((< semicolon-count max-level) (head1+ dims)) ; if hadn't reached a final semicolon, increment needed
                                          (else                          dims))))
+;               (error (string a max-level semicolon-count))
                (set! a (cond ((= semicolon-count 0)
                                (cond ((> (length (car a)) 1) (fixrow a))                ; hcat present, fix accumulated values into row
                                      (else                   (cons (caar a) (cdr a))))) ; move remaining value in head accumulator into tail
@@ -1882,37 +1885,31 @@
             (if (and (eqv? t #\newline)
                      (or (memv (peek-token s) (list #\newline #\; 'for))
                          (> semicolon-count 0)))
-              ; treat any number of line breaks not prior to a comprehension as a semicolon if semicolons absent
-              (parse-matrix-inner s a dims rown is-row-first semicolon-count max-level closer #f)
+              (parse-matrix-inner s a dims rown is-row-first semicolon-count max-level closer #f) ; treat any number of line breaks not prior to a comprehension as a semicolon if semicolons absent
               (begin (set! semicolon-count (1+ semicolon-count))
-                     (if (= semicolon-count 2)
-                       (cond ((and (null? is-row-first)
-                                   (not (eqv? (peek-token s) #\;)))  (set! is-row-first #f)) ; [a ;; b...]
-                             (is-row-first
-                               (case (peek-token s)
-                                 ((#\newline) ; [a b ;; <newline>
-                                   (set! semicolon-count (1- semicolon-count))
-                                   ; TODO undo what the first semicolon did *****************************
-                                   (parse-matrix-inner s a dims rown is-row-first semicolon-count max-level closer #f)
-                                 )
-                                 ((#\;) ; [a ;;;...]
-                                   '())
-                                 (else ; [a b ;; c...]
-                                   (error "cannot mix space and ;; separators in an array expression, except to wrap a line")))
-                                )))
-                     ; append row length to dimension list if we have reached a 3rd dimension (only used for 3+)
-                     (if (and (= semicolon-count 3) (or (null? is-row-first) is-row-first) (= max-level 1)) ; TODO: check to see if the variable itself acts as true or false when null
-                       (set! dims (cons rown dims)))
-                     (set! dims (cond ((= max-level 0)               (list 1))      ; first semicolon
-                                      ((> semicolon-count max-level) (cons 1 dims)) ; new dimension, extend dims
-                                      ((= semicolon-count max-level) (head1+ dims)) ; new member of max dimension, increment
-                                      (else                          dims)))        ; no change
-                     ; collect the new values into a row on first new semicolon, if more than item in this row
-                     (set! a (cond ((= semicolon-count 1)
-                                     (cond ((> (length (car a)) 1) (cons '() (fixrow a)))
-                                           (else                   (cons '() (cons (caar a) (cdr a))))))
-                                   (else                           a)))
-                     (set! max-level (max max-level semicolon-count))
+                     (let ((is-line-sep (if (and (not (null? is-row-first)) is-row-first (= semicolon-count 2))
+                                          (let ((next (peek-token s)))
+                                            (cond ((eqv? next #\newline) #t)  ; [a b ;;<newline>...
+                                                  ((not (or (eof-object? next) (eqv? next #\;)))   ; [a b ;;...
+                                                    (error "2 cannot mix space and ;; separators in an array expression, except to wrap a line"))
+                                                  (else                            #f)))            ; [a b ;;<eof> for REPL,  [a ;;...
+                                           #f)))                                                   ; [a ; b ;; c ; d...
+                       (if is-line-sep
+                         (begin (set! a (unfix a))
+                                (set! max-level (cond ((null? (cdr a)) 0) ; no prior single semicolon
+                                                      (else            max-level))))
+                         (begin (if (and (= semicolon-count 3) (or (null? is-row-first) is-row-first) (= max-level 1)) ; TODO: check to see if the variable itself acts as true or false when null
+                                  (set! dims (cons rown dims))) ; append row length to dimension list if we have reached a 3rd dimension (only used for 3+)
+                                (set! dims (cond ((= max-level 0)               (list 1))      ; first semicolon
+                                                 ((> semicolon-count max-level) (cons 1 dims)) ; new dimension, extend dims
+                                                 ((= semicolon-count max-level) (head1+ dims)) ; new member of max dimension, increment
+                                                 (else                          dims)))        ; no change
+                                (set! max-level (max max-level semicolon-count))
+                                ; collect the new values into a row on first new semicolon, if more than item in this row
+                                (set! a (cond ((= semicolon-count 1)
+                                                (cond ((> (length (car a)) 1) (cons '() (fixrow a)))
+                                                      (else                   (cons '() (cons (caar a) (cdr a))))))
+                                              (else                           a))))))
                      (parse-matrix-inner s a dims rown is-row-first semicolon-count max-level closer #f))))
           ((#\,)
             (error "unexpected comma in matrix expression"))
@@ -1941,7 +1938,8 @@
                 ; at least 2 elements separated by space found [a b...], [a; b c...]
                 (if (null? is-row-first)
                   (set! is-row-first #t)
-                  (error "cannot mix space and ;; separators in an array expression, except to wrap a line")))
+                  (if (not is-row-first)
+                   (error "cannot mix space and ;; separators in an array expression, except to wrap a line"))))
               (parse-matrix-inner s a dims rown is-row-first 0 max-level closer #f)))))))
   (with-bindings ((end-symbol last-end-symbol))
     (parse-matrix-inner s (cons (list first) '()) (list 1) 1 '() 0 0 closer gotnewline)))
