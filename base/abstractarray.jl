@@ -1995,14 +1995,14 @@ hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool) = []
 
 function hvncat(dims::Tuple{Vararg{Int, N}}, row_first::Bool, xs...) where N
     N == 1 && return vcat(xs...)
-    N == 2 && return hvcat(ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
+    row_first && N == 2 && return hvcat(ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
     return typed_hvncat(promote_eltypeof(xs...), dims, row_first, xs...)
 end
 
 hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool, xs::Number...) = typed_hvncat(promote_typeof(xs...), dims, row_first, xs...)
 function hvncat(dims::Tuple{Vararg{Int, N}}, row_first::Bool, xs::T...) where T<:Number where N
     N == 1 && return vcat(xs...)
-    N == 2 && return hvcat(ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
+    row_first && N == 2 && return hvcat(ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
 
     a = Array{T, N}(undef, dims...)
     if length(a) != length(xs)
@@ -2119,6 +2119,7 @@ typed_hvncat(Int64, (2,1,2,1,2), a, b, c, d, e, f, g, h, i, j)
 
 function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first, as::AbstractArray...) where T where N
     N == 1 && return typed_vcat(T, xs...)
+    row_first && N == 2 && return typed_hvcat(T, ntuple(x->dims[2], length(xs) ÷ dims[2]), as...)
 
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2
@@ -2209,6 +2210,7 @@ typed_vhncat(::Type{T}, dims::Tuple{Vararg{Int}}, row_first::Bool) where T = Vec
 
 function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, as...) where T where N
     N == 1 && return typed_vcat(T, as...)
+    row_first && N == 2 && return typed_hvcat(T, ntuple(x->dims[2], length(xs) ÷ dims[2]), as...)
 
     # strategy: concatenate stepwise from the lowest dimension to the highest
 
@@ -2260,6 +2262,7 @@ end
 
 function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, xs::Number...) where T where N
     N == 1 && return typed_vcat(T, xs...)
+    row_first && N == 2 && return typed_hvcat(T, ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
 
     a = Array{T, N}(undef, dims...)
     if length(a) != length(xs)

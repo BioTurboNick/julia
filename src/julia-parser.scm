@@ -1870,7 +1870,6 @@
                                         (else                                   '(false))))
                (set! dims (reverse (cond ((< semicolon-count max-level) (head1+ dims)) ; if hadn't reached a final semicolon, increment needed
                                          (else                          dims))))
-               ;(error (string a dims max-level semicolon-count))
                (set! a (cond ((= semicolon-count 0)
                                (cond ((> (length (car a)) 1) (fixrow a))                ; hcat present, fix accumulated values into row
                                      (else                   (cons (caar a) (cdr a))))) ; move remaining value in head accumulator into tail
