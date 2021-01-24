@@ -2256,7 +2256,7 @@ function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, a
     if lowd == N
         return _cat_t(N, T, blocks[1:outpos-1]...)
     else
-        return typed_hvncat(T, (dims[1:lowd-1]..., 1, dims[lowd+1:end]...), blocks[1:outpos-1]...)
+        return typed_hvncat(T, (dims[1:lowd-1]..., 1, dims[lowd+1:end]...), row_first, blocks[1:outpos-1]...)
     end
 end
 
