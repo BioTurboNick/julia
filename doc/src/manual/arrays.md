@@ -154,7 +154,7 @@ julia> [1:2
  6
 ```
 
-Similarly, if the arguments are separated by tabs or spaces, then their contents are
+Similarly, if the arguments are separated by tabs or spaces or double semicolons, then their contents are
 _horizontally concatenated_ together.
 
 ```jldoctest
@@ -171,6 +171,15 @@ julia> [[1,2]  [4,5]  [7,8]]
 julia> [1 2 3] # Numbers can also be horizontally concatenated
 1×3 Matrix{Int64}:
  1  2  3
+
+julia> [1;; 2;; 3;; 4]
+1×4 Matrix{Int64}:
+ 1  2  3  4
+
+julia> [1 2 ;; # double semicolons may be used to add a line break within a horizontal concatenation using spaces or tabs
+        3 4]
+1×4 Matrix{Int64}:
+ 1  2  3  4
 ```
 
 Using semicolons (or newlines) and spaces (or tabs) can be combined to concatenate
@@ -189,14 +198,26 @@ julia> [zeros(Int, 2, 2) [1; 2]
  0  0  1
  0  0  2
  3  4  5
+
 ```
 
-Combining the above syntax with two or more semicolons allows you to concatentate along 3 or
-more dimensions at the same time.
+The order of elements may be reversed using single and double semicolons.
+
+```jldoctest
+julia> [zeros(Int, 2, 2) ; [3 4] ;; [1; 2] ; 5]
+3×3 Matrix{Int64}:
+ 0  0  1
+ 0  0  2
+ 3  4  5
+```
+
+Extending the above syntax with three or more semicolons allows you to concatentate along 3 or
+more dimensions at the same time. Fewer semicolons take precedence, so
+`[a; b;; c;;; d] == [[[a; b];; c];;; d]`.
 
 ```jldoctest
 julia> [1 2
-        3 4;;
+        3 4;;;
         5 6
         7 8]
 2×2×2 Array{Int64, 3}:
@@ -208,7 +229,7 @@ julia> [1 2
  5  6
  7  8
 
-julia> [1 2;; 3 4;;; 5 6;; 7 8]
+julia> [1 2;;; 3 4;;;; 5 6;;; 7 8]
 1×2×2×2 Array{Int64, 4}:
 [:, :, 1, 1] =
  1  2
@@ -222,7 +243,7 @@ julia> [1 2;; 3 4;;; 5 6;; 7 8]
 [:, :, 2, 2] =
  7  8
 
-julia> [[1 2;; 3 4];;; [5 6];; [7 8]]
+julia> [[1 2;;; 3 4];;;; [5 6];;; [7 8]]
 1×2×2×2 Array{Int64, 4}:
 [:, :, 1, 1] =
  1  2
@@ -237,16 +258,28 @@ julia> [[1 2;; 3 4];;; [5 6];; [7 8]]
  7  8
 ```
 
+Terminating semicolons may also be used to extend the dimensions.
+
+```jldoctest
+julia> [1;;]
+1×1 Matrix{Int64}:
+ 1
+
+julia> [1;;;]
+1×1×1 Array{Int64, 3}:
+ 1
+```
+
 More generally, concatenation can be accomplished through the [`cat`](@ref) function.
 These syntaxes are shorthands for function calls that themselves are convenience functions:
 
-| Syntax             | Function         | Description                                                                                 |
-|:------------------ |:---------------- |:------------------------------------------------------------------------------------------- |
-|                    | [`cat`](@ref)    | concatenate input arrays along dimension(s) `k`                                             |
-| `[A; B; C; ...]`   | [`vcat`](@ref)   | shorthand for `cat(A...; dims=1)                                                            |
-| `[A B C ...]`      | [`hcat`](@ref)   | shorthand for `cat(A...; dims=2)                                                            |
-| `[A B; C D; ...]`  | [`hvcat`](@ref)  | simultaneous vertical and horizontal concatenation                                          |
-| `[A B; C D;; ...]` | [`hvncat`](@ref) | simultaneous n-dimensional concatenation, where 2 or more semicolons indicate 3+ dimensions |
+| Syntax                 | Function         | Description                                                                                                |
+|:---------------------- |:---------------- |:---------------------------------------------------------------------------------------------------------- |
+|                        | [`cat`](@ref)    | concatenate input arrays along dimension(s) `k`                                                            |
+| `[A; B; C; ...]`       | [`vcat`](@ref)   | shorthand for `cat(A...; dims=1)                                                                           |
+| `[A B C ...]`          | [`hcat`](@ref)   | shorthand for `cat(A...; dims=2)                                                                           |
+| `[A B; C D; ...]`      | [`hvcat`](@ref)  | simultaneous vertical and horizontal concatenation                                                         |
+| `[A; C;; B; D;;; ...]` | [`hvncat`](@ref) | simultaneous n-dimensional concatenation, where number of semicolons indicate the dimension to concatenate |
 
 ### Typed array literals
 

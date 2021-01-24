@@ -2057,7 +2057,7 @@ julia> [a b c;;; d e f]
 [:, :, 2] =
  4  5  6
 
-julia> hvncat((2,1,3), a,b,c,d,e,f)
+julia> hvncat((2,1,3), false, a,b,c,d,e,f)
 2×1×3 Array{Int64, 3}:
 [:, :, 1] =
  1
@@ -2110,14 +2110,14 @@ h .= 8
 i .= 9
 j .= 10
 
-[a; b c ;; d e f ; g ;;;; h ;;; i j]
+[a; b c ;;; d e f ; g ;;;;; h ;;;; i j]
 
 expected size = (3,3,3,4,7)
 
-typed_hvncat(Int64, (2,1,2,1,2), a, b, c, d, e, f, g, h, i, j)
+typed_hvncat(Int64, (2,1,2,1,2), true, a, b, c, d, e, f, g, h, i, j)
 =#
 
-function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first, as::AbstractArray...) where T where N
+function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, as::AbstractArray...) where T where N
     N == 1 && return typed_vcat(T, xs...)
     row_first && N == 2 && return typed_hvcat(T, ntuple(x->dims[2], length(xs) ÷ dims[2]), as...)
 
