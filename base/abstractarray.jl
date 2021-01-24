@@ -1766,28 +1766,6 @@ dimensions for every new input array and putting zero blocks elsewhere. For exam
 `matrices[1]`, `matrices[2]`, ... as diagonal blocks and matching zero blocks away from the
 diagonal.
 
-# Examples
-```jldoctest
-julia> a = [1 2; 3 4;; 5 6; 7 8]
-2×2×2 Array{Int64, 3}:
-[:, :, 1] =
- 1  2
- 3  4
-
-[:, :, 2] =
- 5  6
- 7  8
-
-julia> b = [[9 10; 11 12];; [13 14]; [15 16]]
-2×2×2 Array{Int64, 3}:
-[:, :, 1] =
-  9  10
- 11  12
-
-[:, :, 2] =
- 13  14
- 15  16
-
 julia> cat(a, b, dims=3)
 2×2×4 Array{Int64, 3}:
 [:, :, 1] =
