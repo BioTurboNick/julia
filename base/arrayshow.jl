@@ -269,7 +269,7 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, show_full::Bo
     if isempty(a)
         return
     end
-    tailinds = tail(tail(axes(a)))
+    tailinds = Base.tail(Base.tail(axes(a)))
     nd = ndims(a)-2
     show_full || print(io, "[")
     Is = CartesianIndices(tailinds)
@@ -290,7 +290,7 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, show_full::Bo
                             end
                         end
                         #println(io, idxs)
-                        show_full || [print(io, ";") for i ∈ 1:i+1]
+                        show_full || [print(io, ";") for i ∈ 1:i+2]
                         print(io, " \u2026 ")
                         show_full && print(io, "\n\n")
                         @goto skip
@@ -313,7 +313,7 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, show_full::Bo
         else
             idxdiff = lastidxs .- idxs .< 0
             if any(idxdiff)
-                lastchangeindex = 1 + findlast(idxdiff)
+                lastchangeindex = 2 + findlast(idxdiff)
                 [print(io, ";") for i ∈ 1:lastchangeindex]
                 print(io, " ")
             end
