@@ -1988,19 +1988,19 @@ end
 
 # nd concatenation
 
-hvncat(dims::Tuple{Vararg{Int}}) = []
+hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool) = []
 # creates ambiguity
 #hvncat(dims::Tuple{Vararg{Int, 1}}, xs...) = vcat(xs...)
 #hvncat(dims::Tuple{Vararg{Int}}, xs...) = typed_hvncat(promote_eltypeof(xs...), dims, xs...)
 
-function hvncat(dims::Tuple{Vararg{Int, N}}, xs...) where N
+function hvncat(dims::Tuple{Vararg{Int, N}}, row_first::Bool, xs...) where N
     N == 1 && return vcat(xs...)
     N == 2 && return hvcat(ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
-    return typed_hvncat(promote_eltypeof(xs...), dims, xs...)
+    return typed_hvncat(promote_eltypeof(xs...), dims, row_first, xs...)
 end
 
-hvncat(dims::Tuple{Vararg{Int}}, xs::Number...) = typed_hvncat(promote_typeof(xs...), dims, xs...)
-function hvncat(dims::Tuple{Vararg{Int, N}}, xs::T...) where T<:Number where N
+hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool, xs::Number...) = typed_hvncat(promote_typeof(xs...), dims, row_first, xs...)
+function hvncat(dims::Tuple{Vararg{Int, N}}, row_first::Bool, xs::T...) where T<:Number where N
     N == 1 && return vcat(xs...)
     N == 2 && return hvcat(ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
 
@@ -2008,7 +2008,8 @@ function hvncat(dims::Tuple{Vararg{Int, N}}, xs::T...) where T<:Number where N
     if length(a) != length(xs)
        throw(ArgumentError("argument count does not match specified shape (expected $(length(a)), got $(length(xs)))"))
     end
-    hvncat_fill(a, xs...)
+    row_first ? hvncat_fill(a, xs...) :
+                vhncat_fill(a, xs...)
 end
 
 function hvncat_fill(a::Array{T, N}, xs...) where T where N
@@ -2028,19 +2029,27 @@ function hvncat_fill(a::Array{T, N}, xs...) where T where N
     a
 end
 
+function vhncat_fill(a::Array{T, N}, xs...) where T where N
+    @inbounds for i=1:length(a)
+        a[i] = xs[i]
+    end
+    a
+end
+
 """
-    hvncat(dims::Tuple{Vararg{Int}}, values...)
+    hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool, values...)
 
 Horizontal, vertical, and n-dimensional concatenation in one call. This function is called
-for block matrix syntax. The first argument specifies the number of arguments to
-concatenate in each block row.
+for block matrix syntax. The first argument specifies the number of arguments in `values`
+along the first axis for each dimension. `row_first` indicates whether `values` are ordered
+first by rows (true) or first by columns (false).
 
 # Examples
 ```jldoctest
 julia> a, b, c, d, e, f = 1, 2, 3, 4, 5, 6
 (1, 2, 3, 4, 5, 6)
 
-julia> [a b c;; d e f]
+julia> [a b c;;; d e f]
 1×3×2 Array{Int64, 3}:
 [:, :, 1] =
  1  2  3
@@ -2062,7 +2071,7 @@ julia> hvncat((2,1,3), a,b,c,d,e,f)
  5
  6
 
-julia> [a b;; c d;; e f]
+julia> [a b;;; c d;;; e f]
 1×2×3 Array{Int64, 3}:
 [:, :, 1] =
  1  2
@@ -2074,9 +2083,8 @@ julia> [a b;; c d;; e f]
  5  6
 ```
 """
-hvncat(dims::Tuple{Vararg{Int}}, xs::AbstractArray...) = typed_hvncat(promote_eltype(xs...), dims, xs...)
-hvncat(dims::Tuple{Vararg{Int}}, xs::AbstractArray{T}...) where T = typed_hvncat(T, dims, xs...)
-
+hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool, xs::AbstractArray...) = typed_hvncat(promote_eltype(xs...), dims, row_first, xs...)
+hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool, xs::AbstractArray{T}...) where T = typed_hvncat(T, dims, row_first, xs...)
 
 #=
 testing
@@ -2109,25 +2117,28 @@ expected size = (3,3,3,4,7)
 typed_hvncat(Int64, (2,1,2,1,2), a, b, c, d, e, f, g, h, i, j)
 =#
 
-function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as::AbstractArray...) where T where N
+function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first, as::AbstractArray...) where T where N
     N == 1 && return typed_vcat(T, xs...)
+
+    d1 = row_first ? 2 : 1
+    d2 = row_first ? 1 : 2
 
     # discover dimensions
     nd = max(N, length(size(as[1])))
     outdims = zeros(Int, nd)
 
-    # discover number of columns
-    @inbounds for i = 1:dims[2]
-        outdims[2] += size(as[i], 2)
+    # discover number of rows/columns
+    @inbounds for i = 1:dims[d1]
+        outdims[d1] += size(as[i], d1)
     end
 
     currentdims = zeros(Int, nd)
     blockcount = 0
     @inbounds for i = eachindex(as)
-        currentdims[2] += size(as[i], 2)
-        if currentdims[2] == outdims[2]
-            currentdims[2] = 0
-            for d = (1, 3:nd...)
+        currentdims[d1] += size(as[i], d1)
+        if currentdims[d1] == outdims[d1]
+            currentdims[d1] = 0
+            for d = (d2, 3:nd...)
                 currentdims[d] += size(as[i], d)
                 if outdims[d] == 0 # unfixed dimension
                     blockcount += 1
@@ -2182,7 +2193,7 @@ function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as::AbstractArray.
             end
         end
 
-        for j = (2,1,3:nd...)
+        for j = (d1,d2,3:nd...)
             offsets[j] += size(a, j)
             offsets[j] < outdims[j] && break
             offsets[j] = 0
@@ -2191,17 +2202,21 @@ function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as::AbstractArray.
     A
 end
 
-typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int}}) where T = Vector{T}()
+typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int}}, row_first::Bool) where T = Vector{T}()
+typed_vhncat(::Type{T}, dims::Tuple{Vararg{Int}}, row_first::Bool) where T = Vector{T}()
 # creates ambiguity
 #typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, 1}}, xs...) where T = typed_vcat(T, xs...)
 
-function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as...) where T where N
+function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, as...) where T where N
     N == 1 && return typed_vcat(T, as...)
 
     # strategy: concatenate stepwise from the lowest dimension to the highest
 
+    d1 = row_first ? 2 : 1
+    d2 = row_first ? 1 : 2
+
     lowd = 0
-    for d = (2,1,(3:N)...)
+    for d = (d1,d2,(3:N)...)
         if dims[d] > 1
             lowd = d
             break
@@ -2243,14 +2258,15 @@ function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as...) where T whe
     end
 end
 
-function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, xs::Number...) where T where N
+function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, xs::Number...) where T where N
     N == 1 && return typed_vcat(T, xs...)
 
     a = Array{T, N}(undef, dims...)
     if length(a) != length(xs)
        throw(ArgumentError("argument count does not match specified shape (expected $(length(a)), got $(length(xs)))"))
     end
-    hvncat_fill(a, xs...)
+    row_first ? hvncat_fill(a, xs...) :
+                vhncat_fill(a, xs...)
 end
 
 
