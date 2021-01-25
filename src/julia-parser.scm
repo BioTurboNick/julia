@@ -1887,7 +1887,7 @@
                          (> semicolon-count 0)))
               (parse-matrix-inner s a dims rown is-row-first semicolon-count max-level closer #f gotlinesep) ; treat line breaks not prior to a comprehension as a semicolon if semicolons absent
               (begin (set! semicolon-count (1+ semicolon-count))
-                     (let ((is-line-sep (if (and (not (null? is-row-first)) is-row-first (= semicolon-count 2)) ; TODO: can I remove the null check?
+                     (let ((is-line-sep (if (and (not (null? is-row-first)) is-row-first (= semicolon-count 2))
                                           (let ((next (peek-token s)))
                                             (cond ((eqv? next #\newline)           #t)             ; [a b ;;<newline>...
                                                   ((not (or (eof-object? next) (eqv? next #\;)))   ; [a b ;;...
