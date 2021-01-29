@@ -37,6 +37,7 @@ julia> size(A, 2)
 """
 size(t::AbstractArray{T,N}, d) where {T,N} = d::Integer <= N ? size(t)[d] : 1
 
+
 """
     axes(A, d)
 
@@ -1806,6 +1807,10 @@ typed_hcat(T::Type, A::AbstractArray...) = cat_t(T, A...; dims=Val(2))
 
 # 2d horizontal and vertical concatenation
 
+# these are produced in lowering if splatting occurs inside hvcat
+hvcat_rows(rows::Tuple...) = hvcat(map(length, rows), (rows...)...)
+typed_hvcat_rows(T::Type, rows::Tuple...) = typed_hvcat(T, map(length, rows), (rows...)...)
+
 function hvcat(nbc::Integer, as...)
     # nbc = # of block columns
     n = length(as)
@@ -1814,6 +1819,8 @@ function hvcat(nbc::Integer, as...)
     nbr = div(n,nbc)
     hvcat(ntuple(i->nbc, nbr), as...)
 end
+
+
 
 """
     hvcat(rows::Tuple{Vararg{Int}}, values...)
@@ -1971,6 +1978,99 @@ hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool) = []
 #hvncat(dims::Tuple{Vararg{Int, 1}}, xs...) = vcat(xs...)
 #hvncat(dims::Tuple{Vararg{Int}}, xs...) = typed_hvncat(promote_eltypeof(xs...), dims, xs...)
 
+#=
+a... ; 1 ;;; 2 ; b...
+
+
+[1; 2; 3; 4;;; 2; 5; 6; 7]
+
+a = [[1 2 4; 3 4 4], [1 9 4; 4 5 4], [0 4 4; 9 6 4]]
+
+b = [[9; 7; 5; 3; 1; 9; 3; 2], [8; 6; 4; 2; 0; 9; 4; 6]]
+
+c = [5; 5; 5; 5; 5; 5; 5; 5]
+
+[a... ;[0 0 0; 0 0 0] ;;; b... c]
+
+(2,1,2)
+
+(4,1,2)
+
+
+(((... a)) ((vcat (row 0 0 0) (row 0 0 0)))
+
+((... b) c))
+
+
+
+
+
+[a... ;d ;;; b... c]
+(2, 1, 2)
+(([1 2 4; 3 4 4], [1 9 4; 4 5 4], [0 4 4; 9 6 4]),
+([0 0 0; 0 0 0],),
+([9, 7, 5, 3, 1, 9, 3, 2], [8, 6, 4, 2, 0, 9, 4, 6], [5, 5, 5, 5, 5, 5, 5, 5]))
+
+Needs to be (4,1,2)
+
+
+[b... c ;;; a...; d]
+(1, 2, 2)
+(([9, 7, 5, 3, 1, 9, 3, 2], [8, 6, 4, 2, 0, 9, 4, 6], [5, 5, 5, 5, 5, 5, 5, 5]),
+([1 2 4; 3 4 4], [1 9 4; 4 5 4], [0 4 4; 9 6 4]),
+([0 0 0; 0 0 0],))
+
+Needs to be (1,3,2)
+
+because it is dimension 2 and row_first:
+length(rows[1])
+
+
+
+
+e = [b... c]
+e = [e, e]
+[e... ;;; a... ; d]
+(1, 1, 2)
+(([9 8 5; 7 6 5; 5 4 5; 3 2 5; 1 0 5; 9 9 5; 3 4 5; 2 6 5], [9 8 5; 7 6 5; 5 4 5; 3 2 5; 1 0 5; 9 9 5; 3 4 5; 2 6 5]),
+([1 2 4; 3 4 4], [1 9 4; 4 5 4], [0 4 4; 9 6 4]),
+([0 0 0; 0 0 0],))
+
+Needs to be (1,1,3)
+
+length(rows[1]) + size(rows[2][1],i)
+
+
+
+
+
+[e... ;;; a... ; d ;;; e...]
+
+e... (either a or d) e...
+
+[e... ;;; e... ;;; a... ; d]
+
+e... e... (either a or d)
+=#
+
+# these are produced in lowering if splatting occurs inside hvcat
+function hvncat_rows(dims::Tuple{Vararg{Int, N}}, rows::Tuple...) where N
+    i = findfirst(>(1), dims)
+    idim = i == 2 ? length(rows[1]) :
+           i == N ? length(rows[1]) + size(rows[2][1],i) :
+                    sum(map(length, rows[1:dims[i]]))
+    dims = (dims[1:(i - 1)]..., idim, dims[(i + 1):end]...)
+    hvncat(dims, true, (rows...)...)
+end
+function typed_hvncat_rows(T::Type, dims::Tuple{Vararg{Int, N}}, rows::Tuple...) where N
+    i = findfirst(>(1), dims)
+    idim = i == 2 ? length(rows[1]) :
+           i == N ? length(rows[1]) + size(rows[2][1],i) :
+                    sum(map(length, rows[1:dims[i]]))
+    dims = (dims[1:(i - 1)]..., idim, dims[(i + 1):end]...)
+    typed_hvncat(T, dims, true, (rows...)...)
+end
+
 function hvncat(dims::Tuple{Vararg{Int, N}}, row_first::Bool, xs...) where N
     N == 1 && return vcat(xs...)
     row_first && N == 2 && return hvcat(ntuple(x->dims[2], length(xs) ÷ dims[2]), xs...)
@@ -2096,8 +2196,8 @@ typed_hvncat(Int64, (2,1,2,1,2), true, a, b, c, d, e, f, g, h, i, j)
 =#
 
 function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, as::AbstractArray...) where T where N
-    N == 1 && return typed_vcat(T, xs...)
-    row_first && N == 2 && return typed_hvcat(T, ntuple(x->dims[2], length(xs) ÷ dims[2]), as...)
+    N == 1 && return typed_vcat(T, as...)
+    row_first && N == 2 && return typed_hvcat(T, ntuple(x->dims[2], length(as) ÷ dims[2]), as...)
 
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2
@@ -2182,13 +2282,12 @@ function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, a
 end
 
 typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int}}, row_first::Bool) where T = Vector{T}()
-typed_vhncat(::Type{T}, dims::Tuple{Vararg{Int}}, row_first::Bool) where T = Vector{T}()
 # creates ambiguity
 #typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, 1}}, xs...) where T = typed_vcat(T, xs...)
 
 function typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, as...) where T where N
     N == 1 && return typed_vcat(T, as...)
-    row_first && N == 2 && return typed_hvcat(T, ntuple(x->dims[2], length(xs) ÷ dims[2]), as...)
+    row_first && N == 2 && return typed_hvcat(T, ntuple(x->dims[2], length(as) ÷ dims[2]), as...)
 
     # strategy: concatenate stepwise from the lowest dimension to the highest
 

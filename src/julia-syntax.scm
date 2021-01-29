@@ -2408,49 +2408,56 @@
      (expand-forms `(call (top hcat) ,@(cdr e))))
 
    'vcat
-   (lambda (e)
-     (let ((a (cdr e)))
-       (if (any assignment? a)
-           (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
-       (if (has-parameters? a)
-           (error "unexpected semicolon in array expression"))
-       (expand-forms
-         (if (any (lambda (x)
-                   (and (pair? x) (eq? (car x) 'row)))
-                   a)
-           ;; convert nested hcat inside vcat to hvcat
-           (let ((rows (map (lambda (x)
-                              (if (and (pair? x) (eq? (car x) 'row))
-                                (cdr x)
-                                (list x)))
-                              a)))
-              `(call (top hvcat)
-                     (tuple ,.(map length rows))
-                     ,.(apply append rows)))
-            `(call (top vcat) ,@a)))))
+  (lambda (e)
+   (let ((a (cdr e)))
+     (if (any assignment? a)
+         (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
+     (if (has-parameters? a)
+         (error "unexpected semicolon in array expression"))
+     (expand-forms
+       (if (any (lambda (x)
+                  (and (pair? x) (eq? (car x) 'row)))
+                a)
+        ;; convert nested hcat inside vcat to hvcat
+         (let ((rows (map (lambda (x)
+                            (if (and (pair? x) (eq? (car x) 'row))
+                              (cdr x)
+                              (list x)))
+                          a)))
+           ;; in case there is splatting inside `hvcat`, collect each row as a
+           ;; separate tuple and pass those to `hvcat_rows` instead (ref #38844)
+           (if (any (lambda (row) (any vararg? row)) rows)
+             `(call (top hvcat_rows) ,.(map (lambda (x) `(tuple ,.x)) rows))
+             `(call (top hvcat)
+                    (tuple ,.(map length rows))
+                    ,.(apply append rows))))
+         `(call (top vcat) ,@a)))))
 
    'ncat
    (lambda (e)
-     (let ((r (cadr e))
-           (da (cddr e)))
-       (let ((d (car da))
-             (a (cdr da)))
+     (define (deeptuple l)
+       (cond ((atom? l) l)
+             (else      (map (lambda (x) `(tuple ,.(deeptuple x))) l))))
+     (let ((d (cadr e))
+           (a (cddr e)))
          (if (any assignment? a)
            (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
          (if (has-parameters? a)
            (error "unexpected semicolon in array expression"))
          (expand-forms
+           (error (string "hi" (deeptuple a)))
            (let ((rows (map (lambda (x)
                               (if (and (pair? x) (eq? (car x) 'row))
                                 (cdr x)
                                 (list x)))
                             a)))
              (if (any (lambda (x) (any vararg? x)) rows)
-                  (error (string "Splatting ... in an hvncat is not supported")))
-             `(call (top hvncat)
-                    ,d
-                    ,r
-                    ,.(apply append rows)))))))
+               (error rows)
+               ;`(call (top hvncat_rows) ,d ,.(map (lambda (x) `(tuple ,.x)) rows))
+                  ;(error (string "Splatting ... in an hvncat is not supported")))
+               `(call (top hvncat)
+                       ,d
+                       ,.(apply append rows)))))))
 
    'typed_hcat
    (lambda (e)
@@ -2474,9 +2481,13 @@
                                    (cdr x)
                                    (list x)))
                              a)))
-              `(call (top typed_hvcat) ,t
-                     (tuple ,.(map length rows))
-                     ,.(apply append rows)))
+              ;; in case there is splatting inside `hvcat`, collect each row as a
+               ;; separate tuple and pass those to `hvcat_rows` instead (ref #38844)
+               (if (any (lambda (row) (any vararg? row)) rows)
+                   `(call (top typed_hvcat_rows) ,t ,.(map (lambda (x) `(tuple ,.x)) rows))
+                   `(call (top typed_hvcat) ,t
+                          (tuple ,.(map length rows))
+                          ,.(apply append rows))))
             `(call (top typed_vcat) ,t ,@a)))))
 
     'typed_ncat
