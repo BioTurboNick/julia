@@ -2530,8 +2530,7 @@
    'vcat expand-vcat
 
    'ncat expand-ncat
-  
- 
+
    'typed_hcat
    (lambda (e)
      (if (any assignment? (cddr e))
