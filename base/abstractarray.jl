@@ -2035,6 +2035,14 @@ hvncat(::Tuple{}, ::Bool, xs...) = []
 hvncat(::Tuple{Int}, ::Bool, xs...) = vcat(xs...) # methods assume 2+ dimensions
 hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool, xs...) = _hvncat(dims, row_first, xs...)
 
+function hvncat_rows(dims::Tuple{Vararg{Int}}, row_first::Bool, rows::Tuple...) #hvncat(map(length, rows), (rows...)...)
+    println(dims)
+    println(rows)
+    # splatting makes sense for stacking in one dimension [a... ;;; b...] or along two dimensions
+    # But what about [a... ;;; b... c...] or [a... ;;; b... ; c...]
+    #     The only way this could work is if a... is interpreted as a splat along the dimensions in the lower part
+end
+
 _hvncat(::Tuple{Vararg{Int}}, ::Bool) = []
 _hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool, xs...) = _typed_hvncat(promote_eltypeof(xs...), dims, row_first, xs...)
 _hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool, xs::T...) where T<:Number = _typed_hvncat(T, dims, row_first, xs...)

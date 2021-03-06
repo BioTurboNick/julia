@@ -1967,6 +1967,10 @@
                           ,@(apply append rows))))
              `(call ,@vcat ,@a))))))
 
+; This shouldn't work but does: [1 2 3 ;;;; 3 4 ;;; 3]
+;  [1 2 3 ;;; 4; 5; 6]
+;  [1; 2; 3 ;;; 4 5 6]
+
 (define (expand-ncat e
                      (hvncat '((top hvncat))))
   (define (ncons a n l)
@@ -2015,8 +2019,8 @@
                           aflat))
               (dims (cons 'tuple (reverse (get-dims a d)))))
           (if (any (lambda (x) (any vararg? x)) rows)
-              (error (string "Splatting ... in an hvncat is not supported")))
-              `(call ,@hvncat ,dims ,is-row-first ,@(apply append rows)))))))
+              `(call (top hvncat_rows) ,dims ,is-row-first ,@(map (lambda (x) `(tuple ,@x)) rows))
+              `(call ,@hvncat ,dims ,is-row-first ,@(apply append rows))))))))
 
 (define (expand-property-destruct lhss x)
   (if (not (length= lhss 1))
