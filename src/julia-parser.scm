@@ -1863,7 +1863,7 @@
         l
         (ncons a (1- n) (cons a l))))
   (define (fix-level ah n)
-     (if (= (length ah) 1)
+     (if (length= ah 1)
          (car ah)
          (if (= n 1)
              (fix 'row ah)
@@ -1884,7 +1884,7 @@
             (take-token s)
             (set! a (collapse-level (- max-level semicolon-count) a (1+ semicolon-count)))
             (cond ((= max-level 0)
-                   (if (= (length (car a)) 1)
+                   (if (length= (car a) 1)
                        (fix 'vect (car a))
                        (fix 'hcat (car a))))
                   ((= max-level 1)
@@ -1952,6 +1952,7 @@
                    (if (not is-row-first)
                        (error "cannot mix space and ;; separators in an array expression, except to wrap a line")))))
          (parse-matrix-inner s a is-row-first 0 max-level closer #f #f))))))
+  ;; if a [ ] expression is a cat expression, `end` is not special
   (with-bindings ((end-symbol last-end-symbol))
     (parse-matrix-inner s (list (list first)) '() 0 0 closer gotnewline #f)))
 
