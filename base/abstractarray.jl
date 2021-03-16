@@ -2119,38 +2119,68 @@ end
 =#
 
 _typed_hvncat(T::Type, dim::Int, ::Bool, xs...) = _typed_hvncat(T, Val(dim), xs...)
-function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
-    for a ∈ as
-        !(a isa AbstractArray) || ndims(a) <= N || return _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(as)), false, as...)
-        # should also let through those where the high dimensions are all 1. Only if they're > 1 is it a problem.
+_typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N = _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(xs)), false, xs...)
+function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
+    # optimization for arrays that can be concatenated by copying them linearly into the destination
+    # conditions: the elements must all have 1- or 0-length dimensions above N
+    @inbounds for a ∈ as
+        ndims(a) <= N || all(x -> size(a, x) == 1, (N + 1):ndims(a)) ||
+            return _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(as)), false, as...)
     end
 
-    #@inbounds nd = max(N, ndims(as[1])) will need if letting through higher dim arrays
-    
-    maxdim = 0
+    nd = max(N, ndims(as[1]))
+
+    Ndim = 0
     @inbounds for i ∈ 1:lastindex(as)
-        if as[i] isa AbstractArray
-            maxdim += cat_size(as[i], N)
-            for d ∈ 1:N - 1
-            #  This check causes 2 extra allocations when numbers and arrays mixed
-                cat_size(as[1], d) == cat_size(as[i], d) || throw(ArgumentError("mismatched size along axis $d in element $i"))
-            end
-        else
-            maxdim += 1
+        Ndim += cat_size(as[i], N)
+        for d ∈ 1:N - 1
+            cat_size(as[1], d) == cat_size(as[i], d) || throw(ArgumentError("mismatched size along axis $d in element $i"))
         end
     end
 
-    @inbounds A = Array{T, N}(undef, ntuple(d -> cat_size(as[1], d), N - 1)..., maxdim)
+    @inbounds A = Array{T, nd}(undef, ntuple(d -> cat_size(as[1], d), N - 1)..., Ndim, ntuple(x -> 1, nd - N)...)
+    k = 1
+    @inbounds for a ∈ as
+        for i ∈ eachindex(a)
+            A[k] = a[i]
+            k += 1
+        end
+    end
+    return A
+end
+
+# I don't understand why this function performs better when the first vararg is a number vs. an array
+# const y = fill(2)
+# _typed_hvncat(Int, Val(4), 2, y, y, y): 1 allocations and 39 ns
+# _typed_hvncat(Int, Val(4), y, y, y, 2): 5 allocations and 1.2 μs
+# both are still better than the (1, 1, 1, 2) argument variant
+function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
+    # optimization for arrays that can be concatenated by copying them linearly into the destination
+    # conditions: the elements must all have 1- or 0-length dimensions above N
+    nd = N
+    Ndim = 0
+    @inbounds for a ∈ as
+        if a isa AbstractArray
+            cat_size(a, N) == length(a) ||
+                throw(ArgumentError("all dimensions of elements other than $N must be of length 1"))
+            nd = max(nd, ndims(a))
+        end
+        Ndim += cat_size(a, N)
+    end
+
+    @inbounds A = Array{T, nd}(undef, ntuple(x -> 1, N - 1)..., Ndim, ntuple(x -> 1, nd - N)...)
+
     k = 1
     @inbounds for a ∈ as
         if a isa AbstractArray
             for i ∈ eachindex(a)
                 A[k] = a[i]
+                k += 1
             end
         else
             A[k] = a
+            k += 1
         end
-        k += 1
     end
     return A
 end
