@@ -2151,8 +2151,8 @@ end
 
 # I don't understand why this function performs better when the first vararg is a number vs. an array
 # const y = fill(2)
-# _typed_hvncat(Int, Val(4), 2, y, y, y): 1 allocations and 39 ns
-# _typed_hvncat(Int, Val(4), y, y, y, 2): 5 allocations and 1.2 μs
+# _typed_hvncat(Int, Val(3), 2, y, y, y): 1 allocations and 56 ns
+# _typed_hvncat(Int, Val(3), y, y, y, 2): 2 allocations and 1.2 μs
 # both are still better than the (1, 1, 1, 2) argument variant
 function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
     # optimization for arrays that can be concatenated by copying them linearly into the destination
@@ -2173,10 +2173,9 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
     k = 1
     @inbounds for a ∈ as
         if a isa AbstractArray
-            for i ∈ eachindex(a)
-                A[k] = a[i]
-                k += 1
-            end
+            lena = length(a)
+            copyto!(A, k, a, 1, lena)
+            k += lena
         else
             A[k] = a
             k += 1
