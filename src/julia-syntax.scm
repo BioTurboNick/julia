@@ -1985,7 +1985,7 @@
           (else
            (let ((ashape
                  (map (lambda (x)
-                        (if (and (pair? x) (memv (car x) (list 'row 'nrow)))
+                        (if (is-row x)
                             (if (eq? (car x) 'row)
                                 (if (= d 1)
                                     (get-shape (cdr x) is-row-first (1- d))
