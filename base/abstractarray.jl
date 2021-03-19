@@ -2056,6 +2056,16 @@ _hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::Number...) = _typed_h
 _hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::AbstractArray...) = _typed_hvncat(promote_eltype(xs...), dimsshape, row_first, xs...)
 _hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::AbstractArray{T}...) where T = _typed_hvncat(T, dimsshape, row_first, xs...)
 
+# supports splatting
+function hvncat_rows(shape::Tuple{Vararg{Tuple}}, row_first::Bool, xs::Tuple...)
+    println(shape)
+    println(xs)
+end
+function typed_hvncat_rows(T::Type, shape::Tuple{Vararg{Tuple}}, row_first::Bool, xs::Tuple...)
+    println(shape)
+    println(xs)
+end
+
 typed_hvncat(::Type{T}, ::Tuple{}, ::Bool) where T = Vector{T}()
 typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, xs...) where T = Vector{T}()
 typed_hvncat(T::Type, ::Tuple{Vararg{Any, 1}}, ::Bool, xs...) = typed_vcat(T, xs...) # methods assume 2+ dimensions
