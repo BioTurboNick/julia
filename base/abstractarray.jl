@@ -2111,23 +2111,6 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
     end
 end
 
-#= improvements:
-
-- special case where arrays are being concatenated along their maximum dimension or higher
-  a = fill(1, 2,3,4)
-  b = fill(2, 2,3,3)
-  [a ;;; b] or [a ;;;; b]
-  can just copy in order into the destination array.
-
-
-- special case where arrays are being concatenated along multiple dimensions but all are higher?
-  | I suspect this would be relatively infrequent, not worth special casing?
-
-- more concise way to communicate an empty dimension for the shape form
-  | normally it's a tuple of tuples, perhaps one tuple could be replaced with an int counting the number of identical levels?
-  | would make unbalanced concatenating in a high dimension less costly
-=#
-
 _typed_hvncat(T::Type, dim::Int, ::Bool, xs...) = _typed_hvncat(T, Val(dim), xs...)
 _typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N = _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(xs)), false, xs...)
 function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
@@ -2164,6 +2147,7 @@ end
 # _typed_hvncat(Int, Val(3), 2, y, y, y): 1 allocations and 56 ns
 # _typed_hvncat(Int, Val(3), y, y, y, 2): 2 allocations and 1.2 μs
 # both are still better than the (1, 1, 1, 2) argument variant
+# Apparently an issue with triggering specialization? #36307
 function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
     # optimization for arrays that can be concatenated by copying them linearly into the destination
     # conditions: the elements must all have 1- or 0-length dimensions above N
