@@ -1967,8 +1967,7 @@
                           ,@(apply append rows))))
              `(call ,@vcat ,@a))))))
 
-(define (expand-ncat e (hvncat '((top hvncat)))
-                       (hvncat_rows '((top hvncat_rows))))
+(define (expand-ncat e (hvncat '((top hvncat))))
   (define (zip xss) (apply map list xss))
   (define (sum xs) (foldl + 0 xs))
   (define (is-row a) (and (pair? a)
@@ -2052,8 +2051,7 @@
       (if (is-1d a)
           `(call ,@hvncat ,d ,@aflat)
           (if (any vararg? aflat)
-                ; think I need to wrap every level of a in nested tuples, then have the julia function construct the shape
-                `(call ,@hvncat_rows ,(tf is-row-first) ,@(map (lambda (x) `(tuple ,x)) a))
+              (error (string "Splatting ... in an hvncat with multiple dimensions is not supported"))
               (let ((shape (get-shape a is-row-first d)))
                 (if (is-balanced shape)
                     (let ((dims `(tuple ,@(reverse (get-dims a is-row-first d)))))
@@ -2589,7 +2587,7 @@
    (lambda (e)
      (let ((t (cadr e))
            (e (cdr e)))
-       (expand-ncat e `((top typed_hvncat) ,t) `((top typed_hvncat_rows) ,t))))
+       (expand-ncat e `((top typed_hvncat) ,t))))
 
    '|'|  (lambda (e) (expand-forms `(call |'| ,(cadr e))))
 
