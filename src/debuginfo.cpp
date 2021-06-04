@@ -504,6 +504,7 @@ static int lookup_pointer(
     auto inlineInfo = context->getInliningInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
     uv_rwlock_wrunlock(&threadsafe);
 
+    jl_frame_t *top_frame = &(*frames)[0];
     int fromC = (*frames)[0].fromC;
     int n_frames = inlineInfo.getNumberOfFrames();
     if (n_frames == 0) {
