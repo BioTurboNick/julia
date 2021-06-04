@@ -504,7 +504,6 @@ static int lookup_pointer(
     auto inlineInfo = context->getInliningInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
     uv_rwlock_wrunlock(&threadsafe);
 
-    jl_frame_t *top_frame = &(*frames)[0];
     int fromC = (*frames)[0].fromC;
     int n_frames = inlineInfo.getNumberOfFrames();
     if (n_frames == 0) {
@@ -519,6 +518,7 @@ static int lookup_pointer(
         free(*frames);
         *frames = new_frames;
     }
+    jl_frame_t *top_frame = &(*frames)[n_frames - 1];
     for (int i = 0; i < n_frames; i++) {
         bool inlined_frame = i != n_frames - 1;
         DILineInfo info;
