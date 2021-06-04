@@ -35,6 +35,7 @@ using namespace llvm;
 #include <map>
 #include <vector>
 #include <set>
+#include <iostream>
 #include "julia_assert.h"
 
 #ifdef _OS_DARWIN_
@@ -503,6 +504,7 @@ static int lookup_pointer(
     auto inlineInfo = context->getInliningInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
     uv_rwlock_wrunlock(&threadsafe);
 
+    jl_frame_t *top_frame = &(*frames)[0];
     int fromC = (*frames)[0].fromC;
     int n_frames = inlineInfo.getNumberOfFrames();
     if (n_frames == 0) {
@@ -532,34 +534,93 @@ static int lookup_pointer(
         jl_frame_t *frame = &(*frames)[i];
         std::string func_name(info.FunctionName);
 
-        if (inlined_frame) {
-            frame->inlined = 1;
-            frame->fromC = fromC;
-            if (!fromC) {
-                std::size_t semi_pos = func_name.find(';');
-                if (semi_pos != std::string::npos) {
-                    func_name = func_name.substr(0, semi_pos);
-                    frame->linfo = NULL; // TODO: if (new_frames[n_frames - 1].linfo) frame->linfo = lookup(func_name in linfo)?
-                }
-            }
-        }
-
-        if (func_name == "<invalid>")
-            frame->func_name = NULL;
-        else
-            jl_copy_str(&frame->func_name, func_name.c_str());
-        if (!frame->func_name)
-            frame->fromC = 1;
-
-        frame->line = info.Line;
+        uint32_t line_num = info.Line;
+        frame->line = line_num;
         std::string file_name(info.FileName);
 
         if (file_name == "<invalid>")
             frame->file_name = NULL;
         else
             jl_copy_str(&frame->file_name, file_name.c_str());
+
+        if (inlined_frame) {
+            frame->inlined = 1;
+            frame->fromC = fromC;
+            if (!fromC) {
+                std::size_t semi_pos = func_name.find(';');
+                bool found_info = false;
+                if (semi_pos != std::string::npos) {
+                    func_name = func_name.substr(0, semi_pos);
+                    if (top_frame->linfo && jl_is_method_instance(top_frame->linfo)) {
+                        //jl_safe_printf("looking at inlined frame %s %i called from %s\n", func_name.c_str(), i, top_frame->func_name);
+                        jl_code_info_t *src = jl_get_code_info((jl_method_instance_t*)top_frame->linfo);
+                        if (src != NULL)
+                        {
+                            // look up information on the inlined frame in the parent's line table
+                            // See also the debug info handling in codegen.cpp.
+                            // NB: debuginfoloc is 1-based!
+                            // for (int j = 0; j < n_frames; i++)
+                            // {
+                            //     intptr_t debuginfoloc = ((int32_t*)jl_array_data(src->codelocs))[i];
+                            //     jl_line_info_node_t *locinfo = (jl_line_info_node_t*)
+                            //         jl_array_ptr_ref(src->linetable, debuginfoloc - 1);
+                            //     if (!jl_typeis(locinfo, jl_lineinfonode_type)) {
+                            //         jl_safe_printf("%i %i %li\n", j, n_frames, debuginfoloc);
+                            //         continue; // assertion below is failing but unsure why
+                            //     }
+                            //     //assert(jl_typeis(locinfo, jl_lineinfonode_type));
+                            //     jl_value_t *method_name = locinfo->method;
+                            //     if (jl_is_method_instance(method_name))
+                            //         method_name = ((jl_method_instance_t*)method_name)->def.value;
+                            //     if (jl_is_method(method_name))
+                            //         method_name = (jl_value_t*)((jl_method_t*)method_name)->name;
+                            //     if (jl_is_symbol(method_name))
+                            //         method_name = (jl_value_t*)jl_symbol_name((jl_sym_t*)method_name);
+
+                            //     std::size_t slash_pos = file_name.find_first_of("/\\");
+                            //     if (slash_pos != std::string::npos)
+                            //         file_name = file_name.substr(slash_pos + 1, file_name.length() - slash_pos - 1);
+
+                            //     if (!func_name.compare((char*)method_name) && !file_name.compare(jl_symbol_name(locinfo->file)) && line_num == locinfo->line) {
+                            //         jl_method_instance_t *linfo = jl_new_method_instance_uninit();
+                            //         linfo->def.method = jl_new_method_uninit(locinfo->module);
+                            //         //linfo->def.method->slot_syms
+                            //         linfo->specTypes = jl_nothing;
+                            //         linfo->sparam_vals = jl_alloc_svec(0);
+                            //         // linfo->backedges = jl_alloc_array_1d(jl_array_any_type, 0);
+                            //         frame->linfo = linfo;
+                            //         found_info = true;
+                            //         break;
+                            //     }
+                            // }
+                        }
+                    }
+                }                
+                if (!found_info)
+                    frame->linfo = NULL;
+            }
+        }
+        
+        if (func_name == "<invalid>")
+            frame->func_name = NULL;
+        else
+            jl_copy_str(&frame->func_name, func_name.c_str());
+        if (!frame->func_name)
+            frame->fromC = 1;
     }
     return n_frames;
+}
+
+jl_code_info_t *jl_get_code_info(jl_method_instance_t *methodinst)
+{
+    jl_code_instance_t *codeinst = methodinst->cache;
+    if (!jl_is_code_instance(codeinst))
+        return NULL;
+    jl_value_t *codeinfo = ((jl_code_instance_t*)codeinst)->inferred;
+    if (jl_is_method(methodinst->def.value))
+        return jl_uncompress_ir(methodinst->def.method, codeinst, (jl_array_t*)codeinfo);
+    else
+        return NULL;
 }
 
 #ifdef _OS_DARWIN_
