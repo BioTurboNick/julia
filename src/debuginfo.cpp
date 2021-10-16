@@ -511,7 +511,7 @@ static int lookup_pointer(
         return lookup_pointer(object::SectionRef(), NULL, frames, pointer, slide, demangle, noInline);
     }
     jl_frame_t *parent_frame = NULL;
-    jl_value_t *parent_linetable = NULL;
+    jl_array_t *parent_linetable = NULL;
     if (noInline)
         n_frames = 1;
     if (n_frames > 1) {
@@ -523,14 +523,7 @@ static int lookup_pointer(
         parent_frame = &(*frames)[n_frames - 1];
         jl_method_instance_t *methodinst = parent_frame->linfo;
         if (methodinst) {
-            jl_code_instance_t *codeinst = methodinst->cache;
-            if (codeinst) {
-                jl_value_t *codeinfo = codeinst->inferred;
-                if (jl_is_code_info(codeinfo) || jl_is_array(codeinfo)) {
-                    jl_code_info_t *code = jl_uncompress_ir(methodinst->def.method, codeinst, (jl_array_t*)codeinfo);
-                    parent_linetable = code->linetable;
-                }
-            }
+            parent_linetable = methodinst->inlined;
         }
     }
 

@@ -354,6 +354,7 @@ struct _jl_method_instance_t {
     jl_array_t *callbacks; // list of callback functions to inform external caches about invalidations
     _Atomic(struct _jl_code_instance_t*) cache;
     uint8_t inInference; // flags to tell if inference is running on this object
+    jl_array_t *inlined; // list of lineinfo for methods inlined into this method-instance
 };
 
 // OpaqueClosure

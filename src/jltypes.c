@@ -2442,7 +2442,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_method_instance_type =
         jl_new_datatype(jl_symbol("MethodInstance"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(8,
+                        jl_perm_symsvec(9,
                             "def",
                             "specTypes",
                             "sparam_vals",
@@ -2450,8 +2450,9 @@ void jl_init_types(void) JL_GC_DISABLED
                             "backedges",
                             "callbacks",
                             "cache",
-                            "inInference"),
-                        jl_svec(8,
+                            "inInference",
+                            "inlined"),
+                        jl_svec(9,
                             jl_new_struct(jl_uniontype_type, jl_method_type, jl_module_type),
                             jl_any_type,
                             jl_simplevector_type,
@@ -2459,7 +2460,8 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type,
                             jl_any_type,
                             jl_any_type,
-                            jl_bool_type),
+                            jl_bool_type,
+                            jl_any_type),
                         jl_emptysvec,
                         0, 1, 3);
 
