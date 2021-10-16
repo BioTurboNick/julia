@@ -424,8 +424,8 @@ let li = typeof(fieldtype).name.mt.cache.func::Core.MethodInstance,
     lmime = repr("text/plain", li),
     mmime = repr("text/plain", li.def)
 
-    @test lrepr == lmime == "MethodInstance for fieldtype(...)"
-    @test mrepr == mmime == "fieldtype(...) in Core"
+    @test lrepr == lmime == "MethodInstance for fieldtype(…)"
+    @test mrepr == mmime == "fieldtype(…) in Core"
 end
 
 

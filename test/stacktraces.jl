@@ -114,7 +114,7 @@ end
 let li = typeof(fieldtype).name.mt.cache.func::Core.MethodInstance,
     sf = StackFrame(:a, :b, 3, li, false, false, 0),
     repr = string(sf)
-    @test repr == "fieldtype(...) at b:3"
+    @test repr == "fieldtype(…) at b:3"
 end
 
 let ctestptr = cglobal((:ctest, "libccalltest")),
