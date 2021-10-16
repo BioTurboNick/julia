@@ -202,7 +202,7 @@ function show(io::IO, m::Method)
     sig = unwrap_unionall(m.sig)
     if sig === Tuple
         # Builtin
-        print(io, m.name, "(...) in ", m.module)
+        print(io, m.name, "(…) in ", m.module)
         return
     end
     print(io, decls[1][2], "(")
