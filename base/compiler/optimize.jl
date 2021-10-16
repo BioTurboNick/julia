@@ -324,6 +324,10 @@ function run_passes(ci::CodeInfo, sv::OptimizationState)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @timeit "compact 1" ir = compact!(ir)
     @timeit "Inlining" ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
+    # store information on inlined linetable entries
+    if ci.parent !== nothing
+        ci.parent.inlined = filter(x -> x.inlined_at > 0, ir.linetable)
+    end
     #@timeit "verify 2" verify_ir(ir)
     ir = compact!(ir)
     #@Base.show ("before_sroa", ir)

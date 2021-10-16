@@ -62,14 +62,15 @@ function arg_decl_parts(m::Method, html=false)
     file = m.file
     line = m.line
     argnames = method_argnames(m)
-    if length(argnames) >= m.nargs
+    if length(argnames) > 0 && length(argnames) >= m.nargs
         show_env = ImmutableDict{Symbol, Any}()
         for t in tv
             show_env = ImmutableDict(show_env, :unionall_env => t)
         end
         decls = Tuple{String,String}[argtype_decl(show_env, argnames[i], sig, i, m.nargs, m.isva)
-                    for i = 1:m.nargs]
-        decls[1] = ("", sprint(show_signature_function, unwrapva(sig.parameters[1]), false, decls[1][1], html,
+                        for i = 1:m.nargs]
+        params = length(sig.parameters) > 0 ? unwrapva(sig.parameters[1]) : nothing
+        decls[1] = ("", sprint(show_signature_function, params, false, decls[1][1], html,
                                context = show_env))
     else
         decls = Tuple{String,String}[("", "") for i = 1:length(sig.parameters::SimpleVector)]
@@ -200,7 +201,7 @@ end
 function show(io::IO, m::Method)
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
-    if sig === Tuple
+    if sig === Tuple || length(sig.parameters) == 0
         # Builtin
         print(io, m.name, "(…) in ", m.module)
         return
