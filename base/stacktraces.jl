@@ -52,7 +52,7 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
     file::Symbol
     "the line number in the file containing the execution context"
     line::Int
-    "the MethodInstance or CodeInfo containing the execution context (if it could be found), or Module (inlined frames)"
+    "the MethodInstance or CodeInfo containing the execution context (if it could be found), or Module (for inlined frames)"
     linfo::Union{MethodInstance, CodeInfo, Module, Nothing}
     "true if the code is from C"
     from_c::Bool
