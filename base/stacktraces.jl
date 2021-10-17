@@ -52,8 +52,8 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
     file::Symbol
     "the line number in the file containing the execution context"
     line::Int
-    "the MethodInstance or CodeInfo containing the execution context (if it could be found)"
-    linfo::Union{MethodInstance, CodeInfo, Nothing}
+    "the MethodInstance or CodeInfo containing the execution context (if it could be found), or Module (inlined frames)"
+    linfo::Union{MethodInstance, CodeInfo, Module, Nothing}
     "true if the code is from C"
     from_c::Bool
     "true if the code is from an inlined frame"
@@ -217,8 +217,10 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         elseif frame.func === top_level_scope_sym
             print(io, "top-level scope")
         else
-            Base.print_within_stacktrace(io, Base.demangle_function_name(string(frame.func)), bold=true)
+            println("modulethere")
         end
+    elseif linfo isa Module # Inlined
+        Base.show_tuple_as_call(io, frame.func, Tuple; demangle=true)
     elseif linfo isa MethodInstance
         def = linfo.def
         if isa(def, Method)
@@ -248,6 +250,8 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         end
     elseif linfo isa CodeInfo
         print(io, "top-level scope")
+    else
+        println("modulewhere")
     end
 end
 
@@ -277,9 +281,11 @@ function Base.parentmodule(frame::StackFrame)
         else
             return (def::Method).module
         end
+    elseif linfo isa Module
+        return linfo
     else
-        # The module is not always available (common reasons include inlined
-        # frames and frames arising from the interpreter)
+        # The module is not always available (common reasons include 
+        # frames arising from the interpreter)
         nothing
     end
 end

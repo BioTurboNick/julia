@@ -521,7 +521,7 @@ static int lookup_pointer(
         *frames = new_frames;
 
         parent_frame = &(*frames)[n_frames - 1];
-        jl_method_instance_t *methodinst = parent_frame->linfo;
+        jl_method_instance_t *methodinst = parent_frame->linfo.mi;
         if (methodinst) {
             parent_linetable = methodinst->inlined;
         }
@@ -576,20 +576,11 @@ static int lookup_pointer(
                                 method_name = (jl_value_t*)((jl_method_t*)method_name)->name;
 
                             if (!func_name.compare(jl_symbol_name((jl_sym_t*)method_name)) && !file_name.compare(jl_symbol_name(locinfo->file)) && line_num == locinfo->line) {
-                                jl_method_instance_t *linfo = jl_new_method_instance_uninit();
-                                linfo->def.method = jl_new_method_uninit(locinfo->module);
-                                linfo->def.method->name = (jl_sym_t*)method_name;
-                                linfo->def.method->sig = jl_typeof(locinfo->method);
-                                linfo->def.method->slot_syms = jl_an_empty_string;
-                                linfo->specTypes = (jl_value_t*)jl_anytuple_type;
-                                linfo->sparam_vals = jl_alloc_svec(0);
-                                frame->linfo = linfo;
+                                frame->linfo.module = locinfo->module;
                                 found_info = true;
                                 break;
                             }
                         }
-                        if (!found_info)
-                            frame->linfo = NULL;
                     }
                 }
             }
@@ -1214,13 +1205,13 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
             if (diff == sysimg_fptrs.clone_offsets[i]) {
                 uint32_t idx = sysimg_fptrs.clone_idxs[i] & jl_sysimg_val_mask;
                 if (idx < sysimg_fvars_n) // items after this were cloned but not referenced directly by a method (such as our ccall PLT thunks)
-                    frame0->linfo = sysimg_fvars_linfo[idx];
+                    frame0->linfo.mi = sysimg_fvars_linfo[idx];
                 break;
             }
         }
         for (size_t i = 0; i < sysimg_fvars_n; i++) {
             if (diff == sysimg_fptrs.offsets[i]) {
-                frame0->linfo = sysimg_fvars_linfo[i];
+                frame0->linfo.mi = sysimg_fvars_linfo[i];
                 break;
             }
         }
@@ -1267,7 +1258,7 @@ extern "C" JL_DLLEXPORT int jl_getFunctionInfo_impl(jl_frame_t **frames_out, siz
     int64_t slide;
     uint64_t symsize;
     if (jl_DI_for_fptr(pointer, &symsize, &slide, &Section, &context)) {
-        frames[0].linfo = jl_jit_events->lookupLinfo(pointer);
+        frames[0].linfo.mi = jl_jit_events->lookupLinfo(pointer);
         int nf = lookup_pointer(Section, context, frames_out, pointer, slide, true, noInline);
         return nf;
     }

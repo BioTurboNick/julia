@@ -201,7 +201,7 @@ end
 function show(io::IO, m::Method)
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
-    if sig === Tuple || length(sig.parameters) == 0
+    if sig === Tuple
         # Builtin
         print(io, m.name, "(…) in ", m.module)
         return

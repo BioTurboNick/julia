@@ -969,7 +969,11 @@ typedef struct {
     char *func_name;
     char *file_name;
     int line;
-    jl_method_instance_t *linfo;
+    union {
+        jl_value_t *value; // generic accessor
+        struct _jl_module_t *module; // this is an inlined method
+        jl_method_instance_t *mi;
+    } linfo; // pointer back to the context for this frame
     int fromC;
     int inlined;
 } jl_frame_t;
