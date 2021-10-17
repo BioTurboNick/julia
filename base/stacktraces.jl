@@ -216,8 +216,6 @@ function show_spec_linfo(io::IO, frame::StackFrame)
             print(io, "ip:0x", string(frame.pointer, base=16))
         elseif frame.func === top_level_scope_sym
             print(io, "top-level scope")
-        else
-            println("modulethere")
         end
     elseif linfo isa Module # Inlined
         Base.show_tuple_as_call(io, frame.func, Tuple; demangle=true)
