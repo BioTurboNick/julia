@@ -284,7 +284,7 @@ function Base.parentmodule(frame::StackFrame)
     elseif linfo isa Module
         return linfo
     else
-        # The module is not always available (common reasons include 
+        # The module is not always available (common reasons include
         # frames arising from the interpreter)
         nothing
     end
