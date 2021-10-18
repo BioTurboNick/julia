@@ -248,8 +248,6 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         end
     elseif linfo isa CodeInfo
         print(io, "top-level scope")
-    else
-        println("modulewhere")
     end
 end
 
