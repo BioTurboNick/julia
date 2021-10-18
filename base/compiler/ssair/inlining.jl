@@ -71,6 +71,25 @@ function ssa_inlining_pass!(ir::IRCode, linetable::Vector{LineInfoNode}, state::
     # and analyzing legality of inlining).
     @timeit "analysis" todo = assemble_inline_todo!(ir, state)
     isempty(todo) && return ir
+    for (_, t1) ∈ todo
+        if t1 isa InliningTodo
+            push!(state.inlined_mi, t1.mi)
+        elseif t1 isa UnionSplit
+            for t2 ∈ t1.cases
+                if t2 isa InliningTodo
+                    push!(state.inlined_mi, t2.mi)
+                elseif t2 isa MethodInstance
+                    push!(state.inlined_mi, t2)
+                elseif t2 isa Pair
+                    if t2.second isa InliningTodo
+                        push!(state.inlined_mi, t2.second.mi)
+                    elseif t2.second isa MethodInstance
+                        push!(state.inlined_mi, t2.second)
+                    end
+                end
+            end
+        end
+    end
     # Do the actual inlining for every call we identified
     @timeit "execution" ir = batch_inline!(todo, ir, linetable, propagate_inbounds)
     return ir

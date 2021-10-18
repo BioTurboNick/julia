@@ -26,6 +26,7 @@ struct InliningState{S <: Union{EdgeTracker, Nothing}, T, I<:AbstractInterpreter
     et::S
     mi_cache::T
     interp::I
+    inlined_mi::Vector{MethodInstance}
 end
 
 function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_flag::UInt8,
@@ -72,7 +73,7 @@ mutable struct OptimizationState
         inlining = InliningState(params,
             EdgeTracker(s_edges, frame.valid_worlds),
             WorldView(code_cache(interp), frame.world),
-            interp)
+            interp, MethodInstance[])
         return new(frame.linfo,
                    frame.src, nothing, frame.stmt_info, frame.mod,
                    frame.sptypes, frame.slottypes, false,
@@ -101,7 +102,7 @@ mutable struct OptimizationState
         inlining = InliningState(params,
             nothing,
             WorldView(code_cache(interp), get_world_counter()),
-            interp)
+            interp, MethodInstance[])
         return new(linfo,
                    src, nothing, stmt_info, mod,
                    sptypes_from_meth_instance(linfo), slottypes, false,
@@ -324,9 +325,23 @@ function run_passes(ci::CodeInfo, sv::OptimizationState)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @timeit "compact 1" ir = compact!(ir)
     @timeit "Inlining" ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
-    # store information on inlined linetable entries
-    if ci.parent !== nothing
-        ci.parent.inlined = filter(x -> x.inlined_at > 0, ir.linetable)
+    # store inlined method instances
+    if debugflag
+        inlined_mi = sv.inlining.inlined_mi
+        if ci.parent !== nothing && length(inlined_mi) > 0
+            if ci.parent.inlined === nothing
+                ci.parent.inlined = MethodInstance[]
+            end
+            for imi ∈ inlined_mi
+                if imi.inlined !== nothing
+                    for prev_inlined ∈ imi.inlined
+                        push!(ci.parent.inlined, prev_inlined)
+                    end
+                    imi.inlined = nothing
+                end
+                push!(ci.parent.inlined, imi)
+            end
+        end
     end
     #@timeit "verify 2" verify_ir(ir)
     ir = compact!(ir)

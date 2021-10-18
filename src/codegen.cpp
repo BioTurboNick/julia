@@ -4779,6 +4779,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
             }
             li->specTypes = (jl_value_t*)jl_apply_tuple_type_v(jl_svec_data(sig_args), nsig);
             jl_gc_wb(li, li->specTypes);
+            
+            li->inlined = jl_nothing;
 
             std::tie(closure_m, closure_decls) = emit_function(li, closure_src,
                 ub.constant, ctx.emission_context, jl_unbox_bool(isva.constant));

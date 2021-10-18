@@ -217,8 +217,6 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         elseif frame.func === top_level_scope_sym
             print(io, "top-level scope")
         end
-    elseif linfo isa Module # Inlined
-        Base.show_tuple_as_call(io, frame.func, Tuple; demangle=true)
     elseif linfo isa MethodInstance
         def = linfo.def
         if isa(def, Method)
@@ -248,8 +246,6 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         end
     elseif linfo isa CodeInfo
         print(io, "top-level scope")
-    else
-        println("modulewhere")
     end
 end
 
@@ -279,8 +275,6 @@ function Base.parentmodule(frame::StackFrame)
         else
             return (def::Method).module
         end
-    elseif linfo isa Module
-        return linfo
     else
         # The module is not always available (common reasons include
         # frames arising from the interpreter)
