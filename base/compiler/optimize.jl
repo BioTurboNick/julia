@@ -317,6 +317,11 @@ function optimize(interp::AbstractInterpreter, opt::OptimizationState, params::O
     finish(interp, opt, params, ir, result)
 end
 
+debugflag = false
+function debug_switch()
+    global debugflag = !debugflag
+end
+
 function run_passes(ci::CodeInfo, sv::OptimizationState)
     preserve_coverage = coverage_enabled(sv.mod)
     ir = convert_to_ircode(ci, copy_exprargs(ci.code), preserve_coverage, sv)
@@ -328,6 +333,7 @@ function run_passes(ci::CodeInfo, sv::OptimizationState)
     # store inlined method instances
     if debugflag
         inlined_mi = sv.inlining.inlined_mi
+        inlined_linetable = filter(x -> x.inlined_at > 0, ir.linetable)
         if ci.parent !== nothing && length(inlined_mi) > 0
             if ci.parent.inlined === nothing
                 ci.parent.inlined = MethodInstance[]
@@ -341,6 +347,7 @@ function run_passes(ci::CodeInfo, sv::OptimizationState)
                 end
                 push!(ci.parent.inlined, imi)
             end
+            println(length(ci.parent.inlined), "|", length(inlined_linetable))
         end
     end
     #@timeit "verify 2" verify_ir(ir)

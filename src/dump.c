@@ -1592,7 +1592,7 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
     mi->cache = (jl_code_instance_t*)jl_deserialize_value(s, (jl_value_t**)&mi->cache);
     if (mi->cache)
         jl_gc_wb(mi, mi->cache);
-    mi->inlined = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&mi->inlined);
+    mi->inlined = (jl_value_t*)jl_deserialize_value(s, (jl_value_t**)&mi->inlined);
     if (mi->inlined)
         jl_gc_wb(mi, mi->inlined);
     return (jl_value_t*)mi;

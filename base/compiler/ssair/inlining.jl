@@ -66,6 +66,10 @@ end
 
 @specialize
 
+t1count = 0
+t2count = 0
+t2micount = 0
+
 function ssa_inlining_pass!(ir::IRCode, linetable::Vector{LineInfoNode}, state::InliningState, propagate_inbounds::Bool)
     # Go through the function, performing simple ininlingin (e.g. replacing call by constants
     # and analyzing legality of inlining).
@@ -74,18 +78,15 @@ function ssa_inlining_pass!(ir::IRCode, linetable::Vector{LineInfoNode}, state::
     for (_, t1) ∈ todo
         if t1 isa InliningTodo
             push!(state.inlined_mi, t1.mi)
+            global t1count += 1
         elseif t1 isa UnionSplit
-            for t2 ∈ t1.cases
+            for (_, t2) ∈ t1.cases
                 if t2 isa InliningTodo
                     push!(state.inlined_mi, t2.mi)
+                    global t2count += 1
                 elseif t2 isa MethodInstance
                     push!(state.inlined_mi, t2)
-                elseif t2 isa Pair
-                    if t2.second isa InliningTodo
-                        push!(state.inlined_mi, t2.second.mi)
-                    elseif t2.second isa MethodInstance
-                        push!(state.inlined_mi, t2.second)
-                    end
+                    global t2micount += 1
                 end
             end
         end
