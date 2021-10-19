@@ -106,7 +106,6 @@ inlined at that point, innermost function first.
 function lookup(pointer::Ptr{Cvoid})
     infos = ccall(:jl_lookup_code_address, Any, (Ptr{Cvoid}, Cint), pointer, false)::Core.SimpleVector
     pointer = convert(UInt64, pointer)
-    println("================overalll start")
     isempty(infos) && return [StackFrame(empty_sym, empty_sym, -1, nothing, true, false, pointer)] # this is equal to UNKNOWN
     res = Vector{StackFrame}(undef, length(infos))
     for i in 1:length(infos)
@@ -118,24 +117,17 @@ function lookup(pointer::Ptr{Cvoid})
             mod = linfo::Module
             linfo = nothing
             name = info[1]::Symbol
-            println("=======startlookup")
-            println(name)
-            println(Core.isdefined(mod, name))
             if Core.isdefined(mod, name)
                 func = Core.eval(mod, name)
-                println(info[7] !== nothing)
-                if info[7] == specTypes
+                if info[7] !== nothing
                     specTypes = info[7].parameters[2:end]
-                    println(specTypes)
                     mis = Base.method_instances(func, specTypes)
-                    println(mis)
-                end
-                if length(mis) > 0
-                    linfo = only(mis)
+                    if length(mis) > 0
+                        linfo = only(mis)
+                    end
                 else
-                    # failed to find a method instance, try a method
+                    # no specialize types, just use the method
                     ms = Base.methods(func, mod)
-                    println("tryign method")
                     if length(ms) > 0
                         linfo = only(ms)
                     end
@@ -143,8 +135,6 @@ function lookup(pointer::Ptr{Cvoid})
             end
         end
         res[i] = StackFrame(info[1]::Symbol, info[2]::Symbol, info[3]::Int, linfo, info[5]::Bool, info[6]::Bool, pointer)
-        println(res[i], "|--", linfo)
-        println
     end
     return res
 end
