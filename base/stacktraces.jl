@@ -20,9 +20,9 @@ Stack information representing execution context, with the following fields:
 
   The name of the function containing the execution context.
 
-- `linfo::Union{Core.MethodInstance, CodeInfo, Nothing}`
+- `linfo::Union{Core.MethodInstance, Method, CodeInfo, Nothing}`
 
-  The MethodInstance containing the execution context (if it could be found).
+  The MethodInstance containing the execution context (if it could be found); Method as fallback.
 
 - `file::Symbol`
 
@@ -53,7 +53,7 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
     "the line number in the file containing the execution context"
     line::Int
     "the MethodInstance or CodeInfo containing the execution context (if it could be found)"
-    linfo::Union{MethodInstance, CodeInfo, Nothing}
+    linfo::Union{MethodInstance, Method, CodeInfo, Nothing}
     "true if the code is from C"
     from_c::Bool
     "true if the code is from an inlined frame"
@@ -106,27 +106,45 @@ inlined at that point, innermost function first.
 function lookup(pointer::Ptr{Cvoid})
     infos = ccall(:jl_lookup_code_address, Any, (Ptr{Cvoid}, Cint), pointer, false)::Core.SimpleVector
     pointer = convert(UInt64, pointer)
+    println("================overalll start")
     isempty(infos) && return [StackFrame(empty_sym, empty_sym, -1, nothing, true, false, pointer)] # this is equal to UNKNOWN
     res = Vector{StackFrame}(undef, length(infos))
     for i in 1:length(infos)
         info = infos[i]::Core.SimpleVector
         @assert(length(info) == 7)
-        fromC = info[5]::Bool
-        inlined = info[6]::Bool
         linfo = info[4]
-        specTypes = info[7]
+        # must look up MethodInstance
         if linfo isa Module
-            # must look up MethodInstance
-            if !fromC && inlined && specTypes !== nothing
-                mod = linfo::Module
-                m = mod == Core ? Core.eval(mod, info[1]::Symbol) : mod.eval(info[1]::Symbol)
-                mis = Base.method_instances(m, specTypes.parameters[2:end])
-                linfo = length(mis) > 0 ? only(mis) : nothing
-            else
-                linfo = nothing
+            mod = linfo::Module
+            linfo = nothing
+            name = info[1]::Symbol
+            println("=======startlookup")
+            println(name)
+            println(Core.isdefined(mod, name))
+            if Core.isdefined(mod, name)
+                func = Core.eval(mod, name)
+                println(info[7] !== nothing)
+                if info[7] == specTypes
+                    specTypes = info[7].parameters[2:end]
+                    println(specTypes)
+                    mis = Base.method_instances(func, specTypes)
+                    println(mis)
+                end
+                if length(mis) > 0
+                    linfo = only(mis)
+                else
+                    # failed to find a method instance, try a method
+                    ms = Base.methods(func, mod)
+                    println("tryign method")
+                    if length(ms) > 0
+                        linfo = only(ms)
+                    end
+                end
             end
         end
-        res[i] = StackFrame(info[1]::Symbol, info[2]::Symbol, info[3]::Int, linfo, fromC, inlined, pointer)
+        res[i] = StackFrame(info[1]::Symbol, info[2]::Symbol, info[3]::Int, linfo, info[5]::Bool, info[6]::Bool, pointer)
+        println(res[i], "|--", linfo)
+        println
     end
     return res
 end
@@ -139,7 +157,7 @@ function lookup(ip::Union{Base.InterpreterIP,Core.Compiler.InterpreterIP})
         # interpreted top-level expression with no CodeInfo
         return [StackFrame(top_level_scope_sym, empty_sym, 0, nothing, false, false, 0)]
     end
-    codeinfo = (code isa MethodInstance ? code.uninferred : code)::CodeInfo
+    codeinfo = (code isa MethodInstance ? code.uninferred : code)::Core.CodeInfo    
     # prepare approximate code info
     if code isa MethodInstance && (meth = code.def; meth isa Method)
         func = meth.name
@@ -234,10 +252,15 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         else
             Base.print_within_stacktrace(io, Base.demangle_function_name(string(frame.func)), bold=true)
         end
-    elseif linfo isa MethodInstance
-        def = linfo.def
-        if isa(def, Method)
-            sig = linfo.specTypes
+    elseif linfo isa CodeInfo
+        print(io, "top-level scope")
+    else
+        def, sig = if linfo isa MethodInstance
+            linfo.def, linfo.specTypes
+        else # Method
+            linfo, linfo.sig
+        end
+        if def isa Method
             argnames = Base.method_argnames(def)
             if def.nkw > 0
                 # rearrange call kw_impl(kw_args..., func, pos_args...) to func(pos_args...)
@@ -261,8 +284,6 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         else
             Base.show_mi(io, linfo, true)
         end
-    elseif linfo isa CodeInfo
-        print(io, "top-level scope")
     end
 end
 
