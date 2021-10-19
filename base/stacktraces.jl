@@ -113,8 +113,8 @@ function lookup(pointer::Ptr{Cvoid})
         @assert(length(info) == 7)
         linfo = info[4]
         # must look up MethodInstance
-        if linfo isa Module
-            mod = linfo::Module
+        if linfo isa Base.Module
+            mod = linfo::Base.Module
             linfo = nothing
             name = info[1]::Symbol
             if Core.isdefined(mod, name)
@@ -126,10 +126,10 @@ function lookup(pointer::Ptr{Cvoid})
                         linfo = only(mis)
                     end
                 else
-                    # no specialize types, just use the method
-                    ms = Base.methods(func, mod)
-                    if length(ms) > 0
-                        linfo = only(ms)
+                    # no specialized types, try Tuple
+                    mis = Base.method_instances(func, Tuple)
+                    if length(mis) > 0
+                        linfo = only(mis)
                     end
                 end
             end
