@@ -247,7 +247,7 @@ typedef struct _jl_line_info_node_t {
     jl_sym_t *file;
     intptr_t line;
     intptr_t inlined_at;
-    jl_value_t *specTypes;  // argument types this was specialized for
+    jl_value_t *specTypes;  // argument types this call was specialized for
 } jl_line_info_node_t;
 
 // This type describes a single function body

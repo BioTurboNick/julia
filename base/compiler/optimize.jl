@@ -26,7 +26,6 @@ struct InliningState{S <: Union{EdgeTracker, Nothing}, T, I<:AbstractInterpreter
     et::S
     mi_cache::T
     interp::I
-    inlined_mi::Vector{MethodInstance}
 end
 
 function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_flag::UInt8,
@@ -73,7 +72,7 @@ mutable struct OptimizationState
         inlining = InliningState(params,
             EdgeTracker(s_edges, frame.valid_worlds),
             WorldView(code_cache(interp), frame.world),
-            interp, MethodInstance[])
+            interp)
         return new(frame.linfo,
                    frame.src, nothing, frame.stmt_info, frame.mod,
                    frame.sptypes, frame.slottypes, false,
@@ -102,7 +101,7 @@ mutable struct OptimizationState
         inlining = InliningState(params,
             nothing,
             WorldView(code_cache(interp), get_world_counter()),
-            interp, MethodInstance[])
+            interp)
         return new(linfo,
                    src, nothing, stmt_info, mod,
                    sptypes_from_meth_instance(linfo), slottypes, false,
@@ -317,11 +316,6 @@ function optimize(interp::AbstractInterpreter, opt::OptimizationState, params::O
     finish(interp, opt, params, ir, result)
 end
 
-debugflag = false
-function debug_switch()
-    global debugflag = !debugflag
-end
-
 function run_passes(ci::CodeInfo, sv::OptimizationState)
     preserve_coverage = coverage_enabled(sv.mod)
     ir = convert_to_ircode(ci, copy_exprargs(ci.code), preserve_coverage, sv)
@@ -330,7 +324,7 @@ function run_passes(ci::CodeInfo, sv::OptimizationState)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @timeit "compact 1" ir = compact!(ir)
     @timeit "Inlining" ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
-    # store inlined method instances
+    # store information on inlined linetable entries
     if ci.parent !== nothing
         ci.parent.inlinetable = filter(x -> x.inlined_at > 0, ir.linetable)
     end

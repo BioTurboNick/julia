@@ -66,10 +66,6 @@ end
 
 @specialize
 
-t1count = 0
-t2count = 0
-t2micount = 0
-
 function ssa_inlining_pass!(ir::IRCode, linetable::Vector{LineInfoNode}, state::InliningState, propagate_inbounds::Bool)
     # Go through the function, performing simple ininlingin (e.g. replacing call by constants
     # and analyzing legality of inlining).
