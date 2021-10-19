@@ -52,8 +52,8 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
     file::Symbol
     "the line number in the file containing the execution context"
     line::Int
-    "the MethodInstance or CodeInfo containing the execution context (if it could be found), or Module (inlined frames)"
-    linfo::Union{MethodInstance, CodeInfo, Module, Nothing}
+    "the MethodInstance or CodeInfo containing the execution context (if it could be found)"
+    linfo::Union{MethodInstance, CodeInfo, Nothing}
     "true if the code is from C"
     from_c::Bool
     "true if the code is from an inlined frame"
@@ -110,8 +110,23 @@ function lookup(pointer::Ptr{Cvoid})
     res = Vector{StackFrame}(undef, length(infos))
     for i in 1:length(infos)
         info = infos[i]::Core.SimpleVector
-        @assert(length(info) == 6)
-        res[i] = StackFrame(info[1]::Symbol, info[2]::Symbol, info[3]::Int, info[4], info[5]::Bool, info[6]::Bool, pointer)
+        @assert(length(info) == 7)
+        fromC = info[5]::Bool
+        inlined = info[6]::Bool
+        linfo = info[4]
+        specTypes = info[7]
+        if linfo isa Module
+            # must look up MethodInstance
+            if !fromC && inlined && specTypes !== nothing
+                mod = linfo::Module
+                m = mod == Core ? Core.eval(mod, info[1]::Symbol) : mod.eval(info[1]::Symbol)
+                mis = Base.method_instances(m, specTypes.parameters[2:end])
+                linfo = length(mis) > 0 ? only(mis) : nothing
+            else
+                linfo = nothing
+            end
+        end
+        res[i] = StackFrame(info[1]::Symbol, info[2]::Symbol, info[3]::Int, linfo, fromC, inlined, pointer)
     end
     return res
 end
@@ -216,6 +231,8 @@ function show_spec_linfo(io::IO, frame::StackFrame)
             print(io, "ip:0x", string(frame.pointer, base=16))
         elseif frame.func === top_level_scope_sym
             print(io, "top-level scope")
+        else
+            Base.print_within_stacktrace(io, Base.demangle_function_name(string(frame.func)), bold=true)
         end
     elseif linfo isa MethodInstance
         def = linfo.def

@@ -726,7 +726,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         jl_serialize_value(s, (jl_value_t*)backedges);
         jl_serialize_value(s, (jl_value_t*)NULL); //callbacks
         jl_serialize_code_instance(s, mi->cache, 1);
-        jl_serialize_value(s, (jl_value_t*)mi->inlined);
+        jl_serialize_value(s, (jl_value_t*)mi->inlinetable);
     }
     else if (jl_is_code_instance(v)) {
         jl_serialize_code_instance(s, (jl_code_instance_t*)v, 0);
@@ -1592,9 +1592,9 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
     mi->cache = (jl_code_instance_t*)jl_deserialize_value(s, (jl_value_t**)&mi->cache);
     if (mi->cache)
         jl_gc_wb(mi, mi->cache);
-    mi->inlined = (jl_value_t*)jl_deserialize_value(s, (jl_value_t**)&mi->inlined);
-    if (mi->inlined)
-        jl_gc_wb(mi, mi->inlined);
+    mi->inlinetable = (jl_value_t*)jl_deserialize_value(s, (jl_value_t**)&mi->inlinetable);
+    if (mi->inlinetable)
+        jl_gc_wb(mi, mi->inlinetable);
     return (jl_value_t*)mi;
 }
 

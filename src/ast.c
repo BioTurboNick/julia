@@ -639,7 +639,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             linenum = scm_to_julia_(fl_ctx, car_(lst), mod);
             lst = cdr_(lst);
             inlinedat = scm_to_julia_(fl_ctx, car_(lst), mod);
-            temp = jl_new_struct(jl_lineinfonode_type, modu, name, file, linenum, inlinedat);
+            temp = jl_new_struct(jl_lineinfonode_type, modu, name, file, linenum, inlinedat, jl_nothing);
             JL_GC_POP();
             return temp;
         }

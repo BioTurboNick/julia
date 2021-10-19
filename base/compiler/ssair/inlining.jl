@@ -75,22 +75,6 @@ function ssa_inlining_pass!(ir::IRCode, linetable::Vector{LineInfoNode}, state::
     # and analyzing legality of inlining).
     @timeit "analysis" todo = assemble_inline_todo!(ir, state)
     isempty(todo) && return ir
-    for (_, t1) ∈ todo
-        if t1 isa InliningTodo
-            push!(state.inlined_mi, t1.mi)
-            global t1count += 1
-        elseif t1 isa UnionSplit
-            for (_, t2) ∈ t1.cases
-                if t2 isa InliningTodo
-                    push!(state.inlined_mi, t2.mi)
-                    global t2count += 1
-                elseif t2 isa MethodInstance
-                    push!(state.inlined_mi, t2)
-                    global t2micount += 1
-                end
-            end
-        end
-    end
     # Do the actual inlining for every call we identified
     @timeit "execution" ir = batch_inline!(todo, ir, linetable, propagate_inbounds)
     return ir
@@ -333,12 +317,12 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     inlined_at = Int(compact.result[idx][:line])
     topline::Int32 = linetable_offset + Int32(1)
     coverage = coverage_enabled(def.module)
-    push!(linetable, LineInfoNode(def.module, def.name, def.file, Int(def.line), inlined_at))
+    push!(linetable, LineInfoNode(def.module, def.name, def.file, Int(def.line), inlined_at, item.mi.specTypes))
     oldlinetable = spec.ir.linetable
     for oldline in 1:length(oldlinetable)
         entry = oldlinetable[oldline]
         newentry = LineInfoNode(entry.module, entry.method, entry.file, entry.line,
-            (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset + (oldline == 1) : inlined_at))
+            (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset + (oldline == 1) : inlined_at), entry.specTypes)
         if oldline == 1
             # check for a duplicate on the first iteration (likely true)
             if newentry === linetable[topline]

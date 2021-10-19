@@ -420,7 +420,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     li->callbacks = NULL;
     jl_atomic_store_relaxed(&li->cache, NULL);
     li->inInference = 0;
-    li->inlined = jl_nothing;
+    li->inlinetable = jl_nothing;
     return li;
 }
 
@@ -476,7 +476,7 @@ void jl_add_function_name_to_lineinfo(jl_code_info_t *ci, jl_value_t *name)
         lno = jl_fieldref(ln, 3);
         inl = jl_fieldref(ln, 4);
         jl_value_t *ln_name = (jl_is_long(inl) && jl_unbox_long(inl) == 0) ? name : jl_fieldref_noalloc(ln, 1);
-        rt = jl_new_struct(jl_lineinfonode_type, mod, ln_name, file, lno, inl);
+        rt = jl_new_struct(jl_lineinfonode_type, mod, ln_name, file, lno, inl, jl_nothing);
         jl_array_ptr_set(li, i, rt);
     }
     JL_GC_POP();

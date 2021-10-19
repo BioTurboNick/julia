@@ -331,24 +331,8 @@ function run_passes(ci::CodeInfo, sv::OptimizationState)
     @timeit "compact 1" ir = compact!(ir)
     @timeit "Inlining" ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
     # store inlined method instances
-    if debugflag
-        inlined_mi = sv.inlining.inlined_mi
-        inlined_linetable = filter(x -> x.inlined_at > 0, ir.linetable)
-        if ci.parent !== nothing && length(inlined_mi) > 0
-            if ci.parent.inlined === nothing
-                ci.parent.inlined = MethodInstance[]
-            end
-            for imi ∈ inlined_mi
-                if imi.inlined !== nothing
-                    for prev_inlined ∈ imi.inlined
-                        push!(ci.parent.inlined, prev_inlined)
-                    end
-                    imi.inlined = nothing
-                end
-                push!(ci.parent.inlined, imi)
-            end
-            println(length(ci.parent.inlined), "|", length(inlined_linetable))
-        end
+    if ci.parent !== nothing
+        ci.parent.inlinetable = filter(x -> x.inlined_at > 0, ir.linetable)
     end
     #@timeit "verify 2" verify_ir(ir)
     ir = compact!(ir)

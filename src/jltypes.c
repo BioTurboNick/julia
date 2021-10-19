@@ -2269,9 +2269,9 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_lineinfonode_type =
         jl_new_datatype(jl_symbol("LineInfoNode"), core, jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(5, "module", "method", "file", "line", "inlined_at"),
-                        jl_svec(5, jl_module_type, jl_any_type, jl_symbol_type, jl_long_type, jl_long_type),
-                        jl_emptysvec, 0, 0, 5);
+                        jl_perm_symsvec(6, "module", "method", "file", "line", "inlined_at", "specTypes"),
+                        jl_svec(6, jl_module_type, jl_any_type, jl_symbol_type, jl_long_type, jl_long_type, jl_any_type),
+                        jl_emptysvec, 0, 0, 6);
 
     jl_gotonode_type =
         jl_new_datatype(jl_symbol("GotoNode"), core, jl_any_type, jl_emptysvec,
@@ -2451,7 +2451,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "callbacks",
                             "cache",
                             "inInference",
-                            "inlined"),
+                            "inlinetable"),
                         jl_svec(9,
                             jl_new_struct(jl_uniontype_type, jl_method_type, jl_module_type),
                             jl_any_type,
@@ -2463,7 +2463,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_bool_type,
                             jl_any_type),
                         jl_emptysvec,
-                        0, 1, 3);
+                        0, 1, 4);
 
     jl_code_instance_type =
         jl_new_datatype(jl_symbol("CodeInstance"), core,
