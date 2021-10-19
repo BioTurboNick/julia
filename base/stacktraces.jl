@@ -113,8 +113,8 @@ function lookup(pointer::Ptr{Cvoid})
         @assert(length(info) == 7)
         linfo = info[4]
         # must look up MethodInstance
-        if linfo isa Base.Module
-            mod = linfo::Base.Module
+        if linfo isa Core.Module
+            mod = linfo::Core.Module
             linfo = nothing
             name = info[1]::Symbol
             if Core.isdefined(mod, name)
@@ -122,12 +122,6 @@ function lookup(pointer::Ptr{Cvoid})
                 if info[7] !== nothing
                     specTypes = info[7].parameters[2:end]
                     mis = Base.method_instances(func, specTypes)
-                    if length(mis) > 0
-                        linfo = only(mis)
-                    end
-                else
-                    # no specialized types, try Tuple
-                    mis = Base.method_instances(func, Tuple)
                     if length(mis) > 0
                         linfo = only(mis)
                     end
@@ -147,7 +141,7 @@ function lookup(ip::Union{Base.InterpreterIP,Core.Compiler.InterpreterIP})
         # interpreted top-level expression with no CodeInfo
         return [StackFrame(top_level_scope_sym, empty_sym, 0, nothing, false, false, 0)]
     end
-    codeinfo = (code isa MethodInstance ? code.uninferred : code)::Core.CodeInfo    
+    codeinfo = (code isa MethodInstance ? code.uninferred : code)::Core.CodeInfo
     # prepare approximate code info
     if code isa MethodInstance && (meth = code.def; meth isa Method)
         func = meth.name

@@ -316,6 +316,67 @@ function optimize(interp::AbstractInterpreter, opt::OptimizationState, params::O
     finish(interp, opt, params, ir, result)
 end
 
+inline_node_is_match(x::LineInfoNode, y::LineInfoNode) =
+    x.module == y.module &&
+    x.method == y.method &&
+    x.file == y.file &&
+    x.inlined_at == y.inlined_at
+
+function inlined_node_is_duplicate(x::LineInfoNode, y::LineInfoNode)
+    val = x.module == y.module &&
+        x.method == y.method &&
+        x.file == y.file &&
+        x.line == y.line
+
+    if val
+        if x.specTypes === nothing && y.specTypes === nothing
+            return true
+        elseif x.specTypes !== nothing && y.specTypes !== nothing &&
+            length(x.specTypes.parameters) == length(y.specTypes.parameters)
+            for i ∈ 1:length(x.specTypes.parameters)
+                val &= x.specTypes.parameters[i] == y.specTypes.parameters[i]
+                val || break
+            end
+        else
+            return false
+        end
+    end
+
+    return val
+end
+    
+
+function store_inline_linetable_entries!(mi::MethodInstance, linetable::Vector{LineInfoNode})
+    # get inlined linetable entries
+    inlinetable = filter(x -> x.inlined_at > 0, linetable)
+
+    # for some reason specType is only added to the first linetable entry for a method, so copy it over
+    lastline = nothing
+    for (i, line) ∈ enumerate(inlinetable)
+        if lastline !== nothing && inline_node_is_match(line, lastline) &&
+            lastline.specTypes !== nothing && line.specTypes === nothing
+            inlinetable[i] = line = LineInfoNode(line.module, line.method, line.file, line.line, line.inlined_at, lastline.specTypes)
+        end
+        lastline = line
+    end
+
+    # remove duplicates
+    i = 1
+    todelete = Int[]
+    while i < length(inlinetable)
+        for j ∈ i + 1 : lastindex(inlinetable)
+            if inlined_node_is_duplicate(inlinetable[i], inlinetable[j])
+                push!(todelete, j)
+            end
+        end
+        deleteat!(inlinetable, todelete)
+        empty!(todelete)
+        i += 1
+    end
+
+    mi.inlinetable = inlinetable
+end
+
 function run_passes(ci::CodeInfo, sv::OptimizationState)
     preserve_coverage = coverage_enabled(sv.mod)
     ir = convert_to_ircode(ci, copy_exprargs(ci.code), preserve_coverage, sv)
@@ -324,12 +385,7 @@ function run_passes(ci::CodeInfo, sv::OptimizationState)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @timeit "compact 1" ir = compact!(ir)
     @timeit "Inlining" ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
-    # store information on inlined linetable entries
-    if ci.parent !== nothing
-        # check if there are some linetable entries missing specTypes that should have it (e.g. from @btime run)
-        # trim redundant entries?
-        ci.parent.inlinetable = filter(x -> x.inlined_at > 0, ir.linetable)
-    end
+    ci.parent !== nothing && store_inline_linetable_entries!(ci.parent, ir.linetable)
     #@timeit "verify 2" verify_ir(ir)
     ir = compact!(ir)
     #@Base.show ("before_sroa", ir)
