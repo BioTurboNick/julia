@@ -112,22 +112,25 @@ function lookup(pointer::Ptr{Cvoid})
         info = infos[i]::Core.SimpleVector
         @assert(length(info) == 7)
         linfo = info[4]
-        # must look up MethodInstance
-        if linfo isa Core.Module
-            mod = linfo::Core.Module
-            linfo = nothing
-            name = info[1]::Symbol
-            if Core.isdefined(mod, name)
-                func = Core.eval(mod, name)
-                if info[7] !== nothing
-                    specTypes = info[7].parameters[2:end]
-                    mis = Base.method_instances(func, specTypes)
-                    if length(mis) > 0
-                        linfo = only(mis)
-                    end
-                end
-            end
+        if !(linfo isa Core.MethodInstance)
+            println(linfo)
         end
+        # must look up MethodInstance
+        # if linfo isa Core.Module
+        #     mod = linfo::Core.Module
+        #     linfo = nothing
+        #     name = info[1]::Symbol
+        #     if Core.isdefined(mod, name)
+        #         func = Core.eval(mod, name)
+        #         if info[7] !== nothing
+        #             specTypes = info[7].parameters[2:end]
+        #             mis = Base.method_instances(func, specTypes)
+        #             if length(mis) > 0
+        #                 linfo = only(mis)
+        #             end
+        #         end
+        #     end
+        # end
         res[i] = StackFrame(info[1]::Symbol, info[2]::Symbol, info[3]::Int, linfo, info[5]::Bool, info[6]::Bool, pointer)
     end
     return res

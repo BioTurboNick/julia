@@ -313,12 +313,12 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     inlined_at = Int(compact.result[idx][:line])
     topline::Int32 = linetable_offset + Int32(1)
     coverage = coverage_enabled(def.module)
-    push!(linetable, LineInfoNode(def.module, def.name, def.file, Int(def.line), inlined_at, item.mi.specTypes))
+    push!(linetable, LineInfoNode(def.module, item.mi, def.file, Int(def.line), inlined_at))
     oldlinetable = spec.ir.linetable
     for oldline in 1:length(oldlinetable)
         entry = oldlinetable[oldline]
         newentry = LineInfoNode(entry.module, entry.method, entry.file, entry.line,
-            (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset + (oldline == 1) : inlined_at), entry.specTypes)
+            (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset + (oldline == 1) : inlined_at))
         if oldline == 1
             # check for a duplicate on the first iteration (likely true)
             if newentry === linetable[topline]

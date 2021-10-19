@@ -568,8 +568,7 @@ static int lookup_pointer(
                             jl_line_info_node_t *node = (jl_line_info_node_t*)jl_array_ptr_ref(parent_inlinetable, j);
                             if (!func_name.compare(jl_symbol_name((jl_sym_t*)node->method)) && !file_name.compare(jl_symbol_name(node->file)) && line_num == node->line)
                             {
-                                frame->linfo.module = node->module;
-                                frame->specTypes = node->specTypes;
+                                frame->linfo.value = node->method;
                                 break;
                             }
                         }

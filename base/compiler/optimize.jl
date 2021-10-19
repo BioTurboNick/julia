@@ -318,29 +318,17 @@ end
 
 inline_node_is_match(x::LineInfoNode, y::LineInfoNode) =
     x.module == y.module &&
-    x.method == y.method &&
+    (typeof(x.method) == typeof(y.method) ? x.method == y.method : 
+        y.method isa Symbol ? x.method.def.name == y.method : false) &&
     x.file == y.file &&
-    x.inlined_at == y.inlined_at
+    x.inlined_at == y.inlined_at &&
+    x.line < y.line
 
 function inlined_node_is_duplicate(x::LineInfoNode, y::LineInfoNode)
     val = x.module == y.module &&
-        x.method == y.method &&
+    (typeof(x.method) == typeof(y.method) ? x.method == y.method : false) &&
         x.file == y.file &&
         x.line == y.line
-
-    if val
-        if x.specTypes === nothing && y.specTypes === nothing
-            return true
-        elseif x.specTypes !== nothing && y.specTypes !== nothing &&
-            length(x.specTypes.parameters) == length(y.specTypes.parameters)
-            for i ∈ 1:length(x.specTypes.parameters)
-                val &= x.specTypes.parameters[i] == y.specTypes.parameters[i]
-                val || break
-            end
-        else
-            return false
-        end
-    end
 
     return val
 end
@@ -350,12 +338,11 @@ function store_inline_linetable_entries!(mi::MethodInstance, linetable::Vector{L
     # get inlined linetable entries
     inlinetable = filter(x -> x.inlined_at > 0, linetable)
 
-    # for some reason specType is only added to the first linetable entry for a method, so copy it over
+    # methodinstances are only added to the first linetable entry for a method, so copy it over
     lastline = nothing
     for (i, line) ∈ enumerate(inlinetable)
-        if lastline !== nothing && inline_node_is_match(line, lastline) &&
-            lastline.specTypes !== nothing && line.specTypes === nothing
-            inlinetable[i] = line = LineInfoNode(line.module, line.method, line.file, line.line, line.inlined_at, lastline.specTypes)
+        if lastline !== nothing && inline_node_is_match(line, lastline) && lastline.method isa Symbol
+            inlinetable[i] = line = LineInfoNode(line.module, line.method, line.file, line.line, line.inlined_at)
         end
         lastline = line
     end
@@ -402,6 +389,16 @@ function run_passes(ci::CodeInfo, sv::OptimizationState)
     end
     return ir
 end
+
+#=
+
+Sysimage size (sys-o.a)
+=============
+Master:
+Linetable/specTypes: 296,257 kb
+Linetable/mi: 425,877 kb
+
+=#
 
 function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, sv::OptimizationState)
     # Go through and add an unreachable node after every

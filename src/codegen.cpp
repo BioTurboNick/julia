@@ -6904,7 +6904,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         topinfo.inlined_at = 0;
         topinfo.loc = topdebugloc;
         for (size_t i = 0; i < nlocs; i++) {
-            // LineInfoNode(mod::Module, method::Any, file::Symbol, line::Int, inlined_at::Int, specTypes::Any)
+            // LineInfoNode(mod::Module, method::Any, file::Symbol, line::Int, inlined_at::Int)
             jl_value_t *locinfo = jl_array_ptr_ref(src->linetable, i);
             DebugLineTable &info = linetable[i + 1];
             assert(jl_typeis(locinfo, jl_lineinfonode_type));
