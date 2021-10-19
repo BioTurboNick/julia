@@ -511,7 +511,7 @@ static int lookup_pointer(
         return lookup_pointer(object::SectionRef(), NULL, frames, pointer, slide, demangle, noInline);
     }
     jl_frame_t *parent_frame = NULL;
-    jl_array_t *parent_linetable = NULL;
+    jl_array_t *parent_inlinetable = NULL;
     if (noInline)
         n_frames = 1;
     if (n_frames > 1) {
@@ -521,9 +521,9 @@ static int lookup_pointer(
         *frames = new_frames;
 
         parent_frame = &(*frames)[n_frames - 1];
-        jl_method_instance_t *methodinst = parent_frame->linfo.mi;
-        if (methodinst) {
-            parent_linetable = methodinst->inlined;
+        jl_method_instance_t *methodinst = (jl_method_instance_t*)parent_frame->linfo.mi;
+        if (methodinst && !jl_is_nothing(methodinst->inlinetable)) {
+            parent_inlinetable = (jl_array_t*)methodinst->inlinetable;
         }
     }
 
@@ -541,7 +541,7 @@ static int lookup_pointer(
 
         jl_frame_t *frame = &(*frames)[i];
         std::string func_name(info.FunctionName);
-        uint32_t line_num = info.Line;
+        int32_t line_num = info.Line;
         frame->line = line_num;
         std::string file_name(info.FileName);
         if (file_name == "<invalid>")
@@ -556,28 +556,20 @@ static int lookup_pointer(
                 std::size_t semi_pos = func_name.find(';');
                 if (semi_pos != std::string::npos) {
                     func_name = func_name.substr(0, semi_pos);
-                    if (parent_linetable) {
-                        // look up information on the inlined frame in the parent's line table
-                        size_t n_nodes = jl_array_len(parent_linetable);
-                        bool found_info = false;
+                    if (parent_inlinetable) {
+                        // look up information on the inlined frame in the parent's list of inlined method instances
+                        size_t n_nodes = jl_array_len(parent_inlinetable);
                         // remove any leading ./ or .\ from filename
                         size_t slash_pos = file_name.find_first_of("/\\");
                         size_t dot_pos = file_name.find(".");
-                        if (slash_pos != std::string::npos && dot_pos != std::string::npos && dot_pos == 0 && slash_pos == 1) {
+                        if (slash_pos != std::string::npos && dot_pos != std::string::npos && dot_pos == 0 && slash_pos == 1)
                             file_name = file_name.substr(slash_pos + 1, file_name.length() - slash_pos - 1);
-                        }
                         for (size_t j = 0; j < n_nodes; j++) {
-                            jl_line_info_node_t *locinfo = (jl_line_info_node_t*)jl_array_ptr_ref(parent_linetable, j);
-                            assert(jl_typeis(locinfo, jl_lineinfonode_type));
-                            jl_value_t *method_name = locinfo->method;
-                            if (jl_is_method_instance(method_name))
-                                method_name = ((jl_method_instance_t*)method_name)->def.value;
-                            if (jl_is_method(method_name))
-                                method_name = (jl_value_t*)((jl_method_t*)method_name)->name;
-
-                            if (!func_name.compare(jl_symbol_name((jl_sym_t*)method_name)) && !file_name.compare(jl_symbol_name(locinfo->file)) && line_num == locinfo->line) {
-                                frame->linfo.module = locinfo->module;
-                                found_info = true;
+                            jl_line_info_node_t *node = (jl_line_info_node_t*)jl_array_ptr_ref(parent_inlinetable, j);
+                            if (!func_name.compare(jl_symbol_name((jl_sym_t*)node->method)) && !file_name.compare(jl_symbol_name(node->file)) && line_num == node->line)
+                            {
+                                frame->linfo.module = node->module;
+                                frame->specTypes = node->specTypes;
                                 break;
                             }
                         }
@@ -586,7 +578,7 @@ static int lookup_pointer(
             }
         }
 
-        if (func_name == "<invalid>")
+        if (file_name == "<invalid>")
             frame->func_name = NULL;
         else
             jl_copy_str(&frame->func_name, func_name.c_str());

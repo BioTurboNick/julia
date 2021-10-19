@@ -971,11 +971,12 @@ typedef struct {
     int line;
     union {
         jl_value_t *value; // generic accessor
-        struct _jl_module_t *module; // this is an inlined method
+        struct _jl_module_t *module; // inlined method types (for later lookup)
         jl_method_instance_t *mi;
     } linfo; // pointer back to the context for this frame
     int fromC;
     int inlined;
+    jl_value_t *specTypes; // tuple of types or jl_nothing; used when frame is inlined
 } jl_frame_t;
 
 // Might be called from unmanaged thread

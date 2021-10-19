@@ -247,6 +247,7 @@ typedef struct _jl_line_info_node_t {
     jl_sym_t *file;
     intptr_t line;
     intptr_t inlined_at;
+    jl_value_t *specTypes;  // argument types this was specialized for
 } jl_line_info_node_t;
 
 // This type describes a single function body
@@ -354,7 +355,7 @@ struct _jl_method_instance_t {
     jl_array_t *callbacks; // list of callback functions to inform external caches about invalidations
     _Atomic(struct _jl_code_instance_t*) cache;
     uint8_t inInference; // flags to tell if inference is running on this object
-    jl_array_t *inlined; // list of lineinfo for methods inlined into this method-instance
+    jl_value_t *inlinetable; // list of lineinfo for method instances inlined into this method-instance, or jl_nothing
 };
 
 // OpaqueClosure

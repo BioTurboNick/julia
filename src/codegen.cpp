@@ -4779,6 +4779,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
             }
             li->specTypes = (jl_value_t*)jl_apply_tuple_type_v(jl_svec_data(sig_args), nsig);
             jl_gc_wb(li, li->specTypes);
+            
+            li->inlinetable = jl_nothing;
 
             std::tie(closure_m, closure_decls) = emit_function(li, closure_src,
                 ub.constant, ctx.emission_context, jl_unbox_bool(isva.constant));
@@ -6902,7 +6904,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         topinfo.inlined_at = 0;
         topinfo.loc = topdebugloc;
         for (size_t i = 0; i < nlocs; i++) {
-            // LineInfoNode(mod::Module, method::Any, file::Symbol, line::Int, inlined_at::Int)
+            // LineInfoNode(mod::Module, method::Any, file::Symbol, line::Int, inlined_at::Int, specTypes::Any)
             jl_value_t *locinfo = jl_array_ptr_ref(src->linetable, i);
             DebugLineTable &info = linetable[i + 1];
             assert(jl_typeis(locinfo, jl_lineinfonode_type));
