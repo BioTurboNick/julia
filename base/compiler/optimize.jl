@@ -314,7 +314,7 @@ normalize_method_name(m::Method) = m.name
 normalize_method_name(m::MethodInstance) = (m.def::Method).name
 normalize_method_name(m::Symbol) = m
 normalize_method_name(m) = Symbol("")
-@noinline method_name(m::LineInfoNode) = normalize_method_name(m.method)
+@noinline method_name(m::LineInfoNode)::Symbol = normalize_method_name(m.method)
 
 # run the optimization work
 function optimize(interp::AbstractInterpreter, opt::OptimizationState, params::OptimizationParams, @nospecialize(result))
@@ -337,8 +337,6 @@ inline_node_is_duplicate(topline::LineInfoNode, line::LineInfoNode) =
 function store_inline_linetable_entries!(mi::MethodInstance, linetable::Vector{LineInfoNode})
     # get inlined linetable entries
     inlinetable = filter(x -> x.inlined_at > 0, linetable)
-    debugflag && println()
-    debugflag && println(inlinetable)
 
     # The line table has the first line with a method instance, followed by one or more lines with
     # the method alone. The second line may have the same line number as the first. We need to give
@@ -355,27 +353,21 @@ function store_inline_linetable_entries!(mi::MethodInstance, linetable::Vector{L
     end
 
     # Remove duplicate LineInfoNodes, with respect to all but inlined_at, which is ignored for method lookup
-    i = 1
-    todelete = Int[]
-    while i < length(inlinetable)
+    todelete = falses(length(inlinetable))
+    for i ∈ eachindex(inlinetable)
+        todelete[i] && continue
+        line_i = inlinetable[i]
         for j ∈ i + 1 : lastindex(inlinetable)
-            if inline_node_is_duplicate(inlinetable[i], inlinetable[j])
-                push!(todelete, j)
+            todelete[j] && continue
+            if inline_node_is_duplicate(line_i, inlinetable[j])
+                todelete[j] = true
             end
         end
-        deleteat!(inlinetable, todelete)
-        empty!(todelete)
-        i += 1
     end
+    deleteat!(inlinetable, todelete)
 
-    debugflag && println("After")
-    debugflag && println(inlinetable)
     mi.inlinetable = inlinetable
-end
-
-debugflag = false
-function debug_switch()
-    global debugflag = !debugflag
+    return nothing
 end
 
 function run_passes(ci::CodeInfo, sv::OptimizationState)
