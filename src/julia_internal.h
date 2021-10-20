@@ -976,7 +976,6 @@ typedef struct {
     } linfo; // pointer back to the context for this frame
     int fromC;
     int inlined;
-    jl_value_t *specTypes; // tuple of types or jl_nothing; used when frame is inlined
 } jl_frame_t;
 
 // Might be called from unmanaged thread

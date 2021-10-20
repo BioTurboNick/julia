@@ -566,9 +566,17 @@ static int lookup_pointer(
                             file_name = file_name.substr(slash_pos + 1, file_name.length() - slash_pos - 1);
                         for (size_t j = 0; j < n_nodes; j++) {
                             jl_line_info_node_t *node = (jl_line_info_node_t*)jl_array_ptr_ref(parent_inlinetable, j);
-                            if (!func_name.compare(jl_symbol_name((jl_sym_t*)node->method)) && !file_name.compare(jl_symbol_name(node->file)) && line_num == node->line)
+                            jl_value_t *method_name = node->method;
+                            if (jl_is_method_instance(method_name))
+                                method_name = ((jl_method_instance_t*)method_name)->def.value;
+                            if (jl_is_method(method_name))
+                                method_name = (jl_value_t*)((jl_method_t*)method_name)->name;
+                            if (!func_name.compare(jl_symbol_name((jl_sym_t*)method_name)) && !file_name.compare(jl_symbol_name(node->file)) && line_num == node->line)
                             {
-                                frame->linfo.value = node->method;
+                                if (jl_is_symbol(node->method))
+                                    frame->linfo.module = node->module;
+                                else
+                                    frame->linfo.value = node->method;
                                 break;
                             }
                         }

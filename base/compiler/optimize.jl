@@ -310,49 +310,56 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
     nothing
 end
 
+normalize_method_name(m::Method) = m.name
+normalize_method_name(m::MethodInstance) = (m.def::Method).name
+normalize_method_name(m::Symbol) = m
+normalize_method_name(m) = Symbol("")
+@noinline method_name(m::LineInfoNode) = normalize_method_name(m.method)
+
 # run the optimization work
 function optimize(interp::AbstractInterpreter, opt::OptimizationState, params::OptimizationParams, @nospecialize(result))
     @timeit "optimizer" ir = run_passes(opt.src, opt)
     finish(interp, opt, params, ir, result)
 end
 
-inline_node_is_match(x::LineInfoNode, y::LineInfoNode) =
-    x.module == y.module &&
-    (typeof(x.method) == typeof(y.method) ? x.method == y.method : 
-        y.method isa Symbol ? x.method.def.name == y.method : false) &&
-    x.file == y.file &&
-    x.inlined_at == y.inlined_at &&
-    x.line < y.line
+inline_node_is_match(topline::LineInfoNode, line::LineInfoNode) =
+    topline.module == line.module &&
+    method_name(topline) == method_name(line) &&
+    topline.file == line.file &&
+    topline.inlined_at == line.inlined_at
 
-function inlined_node_is_duplicate(x::LineInfoNode, y::LineInfoNode)
-    val = x.module == y.module &&
-    (typeof(x.method) == typeof(y.method) ? x.method == y.method : false) &&
-        x.file == y.file &&
-        x.line == y.line
-
-    return val
-end
-    
+inline_node_is_duplicate(topline::LineInfoNode, line::LineInfoNode) =
+    topline.module == line.module &&
+    method_name(topline) == method_name(line) &&
+    topline.file == line.file &&
+    topline.line == line.line
 
 function store_inline_linetable_entries!(mi::MethodInstance, linetable::Vector{LineInfoNode})
     # get inlined linetable entries
     inlinetable = filter(x -> x.inlined_at > 0, linetable)
+    debugflag && println()
+    debugflag && println(inlinetable)
 
-    # methodinstances are only added to the first linetable entry for a method, so copy it over
-    lastline = nothing
+    # The line table has the first line with a method instance, followed by one or more lines with
+    # the method alone. The second line may have the same line number as the first. We need to give
+    # them all a reference to the method instance.
+    topline = nothing
     for (i, line) ∈ enumerate(inlinetable)
-        if lastline !== nothing && inline_node_is_match(line, lastline) && lastline.method isa Symbol
-            inlinetable[i] = line = LineInfoNode(line.module, line.method, line.file, line.line, line.inlined_at)
+        if line.method isa MethodInstance
+            topline = line
+        elseif line.method isa Method
+            if inline_node_is_match(topline, line)
+                inlinetable[i] = LineInfoNode(line.module, topline.method, line.file, line.line, line.inlined_at)
+            end
         end
-        lastline = line
     end
 
-    # remove duplicates
+    # Remove duplicate LineInfoNodes, with respect to all but inlined_at, which is ignored for method lookup
     i = 1
     todelete = Int[]
     while i < length(inlinetable)
         for j ∈ i + 1 : lastindex(inlinetable)
-            if inlined_node_is_duplicate(inlinetable[i], inlinetable[j])
+            if inline_node_is_duplicate(inlinetable[i], inlinetable[j])
                 push!(todelete, j)
             end
         end
@@ -361,7 +368,14 @@ function store_inline_linetable_entries!(mi::MethodInstance, linetable::Vector{L
         i += 1
     end
 
+    debugflag && println("After")
+    debugflag && println(inlinetable)
     mi.inlinetable = inlinetable
+end
+
+debugflag = false
+function debug_switch()
+    global debugflag = !debugflag
 end
 
 function run_passes(ci::CodeInfo, sv::OptimizationState)
@@ -394,9 +408,9 @@ end
 
 Sysimage size (sys-o.a)
 =============
-Master:
+Master: 
 Linetable/specTypes: 296,257 kb
-Linetable/mi: 425,877 kb
+Linetable/mi: 265,579 kb
 
 =#
 

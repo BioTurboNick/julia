@@ -462,8 +462,9 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
     return src;
 }
 
-void jl_add_function_name_to_lineinfo(jl_code_info_t *ci, jl_value_t *name)
+void jl_add_function_to_lineinfo(jl_code_info_t *ci, jl_value_t *func)
 {
+    // func may be jl_symbol, jl_method_t, or jl_method_instance_t
     jl_array_t *li = (jl_array_t*)ci->linetable;
     size_t i, n = jl_array_len(li);
     jl_value_t *rt = NULL, *lno = NULL, *inl = NULL;
@@ -475,8 +476,8 @@ void jl_add_function_name_to_lineinfo(jl_code_info_t *ci, jl_value_t *name)
         jl_value_t *file = jl_fieldref_noalloc(ln, 2);
         lno = jl_fieldref(ln, 3);
         inl = jl_fieldref(ln, 4);
-        jl_value_t *ln_name = (jl_is_long(inl) && jl_unbox_long(inl) == 0) ? name : jl_fieldref_noalloc(ln, 1);
-        rt = jl_new_struct(jl_lineinfonode_type, mod, ln_name, file, lno, inl);
+        jl_value_t *ln_func = (jl_is_long(inl) && jl_unbox_long(inl) == 0) ? func : jl_fieldref_noalloc(ln, 1);
+        rt = jl_new_struct(jl_lineinfonode_type, mod, ln_func, file, lno, inl);
         jl_array_ptr_set(li, i, rt);
     }
     JL_GC_POP();
@@ -582,7 +583,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         ct->ptls->in_pure_callback = last_in;
         jl_lineno = last_lineno;
         ct->world_age = last_age;
-        jl_add_function_name_to_lineinfo(func, (jl_value_t*)def->name);
+        jl_add_function_to_lineinfo(func, (jl_value_t*)linfo);
     }
     JL_CATCH {
         ct->ptls->in_pure_callback = last_in;
@@ -636,7 +637,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     m->called = called;
     m->pure = src->pure;
     m->constprop = src->constprop;
-    jl_add_function_name_to_lineinfo(src, (jl_value_t*)m->name);
+    jl_add_function_to_lineinfo(src, (jl_value_t*)m);
 
     jl_array_t *copy = NULL;
     jl_svec_t *sparam_vars = jl_outer_unionall_vars(m->sig);

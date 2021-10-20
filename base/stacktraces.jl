@@ -52,8 +52,9 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
     file::Symbol
     "the line number in the file containing the execution context"
     line::Int
-    "the MethodInstance or CodeInfo containing the execution context (if it could be found)"
-    linfo::Union{MethodInstance, Method, CodeInfo, Nothing}
+    "the MethodInstance or CodeInfo containing the execution context (if it could be found), \
+     or Module (for macro expansions)"
+    linfo::Union{MethodInstance, Module, CodeInfo, Nothing}
     "true if the code is from C"
     from_c::Bool
     "true if the code is from an inlined frame"
@@ -110,28 +111,8 @@ function lookup(pointer::Ptr{Cvoid})
     res = Vector{StackFrame}(undef, length(infos))
     for i in 1:length(infos)
         info = infos[i]::Core.SimpleVector
-        @assert(length(info) == 7)
-        linfo = info[4]
-        if !(linfo isa Core.MethodInstance)
-            println(linfo)
-        end
-        # must look up MethodInstance
-        # if linfo isa Core.Module
-        #     mod = linfo::Core.Module
-        #     linfo = nothing
-        #     name = info[1]::Symbol
-        #     if Core.isdefined(mod, name)
-        #         func = Core.eval(mod, name)
-        #         if info[7] !== nothing
-        #             specTypes = info[7].parameters[2:end]
-        #             mis = Base.method_instances(func, specTypes)
-        #             if length(mis) > 0
-        #                 linfo = only(mis)
-        #             end
-        #         end
-        #     end
-        # end
-        res[i] = StackFrame(info[1]::Symbol, info[2]::Symbol, info[3]::Int, linfo, info[5]::Bool, info[6]::Bool, pointer)
+        @assert(length(info) == 6)
+        res[i] = StackFrame(info[1]::Symbol, info[2]::Symbol, info[3]::Int, info[4], info[5]::Bool, info[6]::Bool, pointer)
     end
     return res
 end
@@ -241,35 +222,41 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         end
     elseif linfo isa CodeInfo
         print(io, "top-level scope")
+    elseif linfo isa Module
+        Base.print_within_stacktrace(io, Base.demangle_function_name(string(frame.func)), bold=true)
     else
         def, sig = if linfo isa MethodInstance
             linfo.def, linfo.specTypes
-        else # Method
+        elseif linfo isa Method # Method
             linfo, linfo.sig
         end
-        if def isa Method
-            argnames = Base.method_argnames(def)
-            if def.nkw > 0
-                # rearrange call kw_impl(kw_args..., func, pos_args...) to func(pos_args...)
-                kwarg_types = Any[ fieldtype(sig, i) for i = 2:(1+def.nkw) ]
-                uw = Base.unwrap_unionall(sig)::DataType
-                pos_sig = Base.rewrap_unionall(Tuple{uw.parameters[(def.nkw+2):end]...}, sig)
-                kwnames = argnames[2:(def.nkw+1)]
-                for i = 1:length(kwnames)
-                    str = string(kwnames[i])::String
-                    if endswith(str, "...")
-                        kwnames[i] = Symbol(str[1:end-3])
+        if linfo isa MethodInstance
+            def = linfo.def
+            sig = linfo.specTypes
+            if def isa Method
+                argnames = Base.method_argnames(def)
+                if def.nkw > 0
+                    # rearrange call kw_impl(kw_args..., func, pos_args...) to func(pos_args...)
+                    kwarg_types = Any[ fieldtype(sig, i) for i = 2:(1+def.nkw) ]
+                    uw = Base.unwrap_unionall(sig)::DataType
+                    pos_sig = Base.rewrap_unionall(Tuple{uw.parameters[(def.nkw+2):end]...}, sig)
+                    kwnames = argnames[2:(def.nkw+1)]
+                    for i = 1:length(kwnames)
+                        str = string(kwnames[i])::String
+                        if endswith(str, "...")
+                            kwnames[i] = Symbol(str[1:end-3])
+                        end
                     end
+                    Base.show_tuple_as_call(io, def.name, pos_sig;
+                                            demangle=true,
+                                            kwargs=zip(kwnames, kwarg_types),
+                                            argnames=argnames[def.nkw+2:end])
+                else
+                    Base.show_tuple_as_call(io, def.name, sig; demangle=true, argnames)
                 end
-                Base.show_tuple_as_call(io, def.name, pos_sig;
-                                        demangle=true,
-                                        kwargs=zip(kwnames, kwarg_types),
-                                        argnames=argnames[def.nkw+2:end])
             else
-                Base.show_tuple_as_call(io, def.name, sig; demangle=true, argnames)
+                Base.show_mi(io, linfo, true)
             end
-        else
-            Base.show_mi(io, linfo, true)
         end
     end
 end
@@ -300,6 +287,8 @@ function Base.parentmodule(frame::StackFrame)
         else
             return (def::Method).module
         end
+    elseif linfo isa Module
+        return linfo
     else
         # The module is not always available (common reasons include
         # frames arising from the interpreter)
