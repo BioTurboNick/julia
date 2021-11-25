@@ -1490,6 +1490,7 @@ function match_input(k::Dict{Char}, s::Union{Nothing,MIState}, term::Union{Abstr
     # placeholder for the wildcard (see normalize_key("*"))
     c == wildcard && return (s, p) -> :ok
     push!(cs, c)
+    println(cs)
     key = haskey(k, c) ? c : wildcard
     # if we don't match on the key, look for a default action then fallback on 'nothing' to ignore
     return match_input(get(k, key, nothing), s, term, cs, keymap)

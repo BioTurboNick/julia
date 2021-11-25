@@ -961,6 +961,7 @@ JL_DLLEXPORT uv_handle_type jl_uv_handle_type(uv_handle_t *handle)
 
 JL_DLLEXPORT int jl_tty_set_mode(uv_tty_t *handle, int mode)
 {
+    jl_printf(JL_STDOUT, "handle type %d\n", handle->type);
     if (handle->type != UV_TTY) return 0;
     uv_tty_mode_t mode_enum = UV_TTY_MODE_NORMAL;
     if (mode)
