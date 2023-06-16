@@ -321,6 +321,8 @@ inline_node_is_duplicate(topline::LineInfoNode, line::LineInfoNode) =
     topline.file === line.file &&
     topline.line === line.line
 
+isdebug = false
+
 function ir_inline_linetable!(linetable::Vector{LineInfoNode}, inlinee_ir::IRCode,
                               inlinee::MethodInstance,
                               inlined_at::Int32)
@@ -330,8 +332,11 @@ function ir_inline_linetable!(linetable::Vector{LineInfoNode}, inlinee_ir::IRCod
     # Append the linetable of the inlined function to our line table
     topline::Int32 = linetable_offset + Int32(1)
     coverage_by_path = JLOptions().code_coverage == 3
+    isdebug && println()
+    isdebug && @show linetable
     push!(linetable, LineInfoNode(inlinee_def.module, inlinee, inlinee_def.file, inlinee_def.line, inlined_at))
     oldlinetable = inlinee_ir.linetable
+    isdebug && @show oldlinetable
     extra_coverage_line = zero(Int32)
     for oldline in eachindex(oldlinetable)
         entry = oldlinetable[oldline]
@@ -354,6 +359,8 @@ function ir_inline_linetable!(linetable::Vector{LineInfoNode}, inlinee_ir::IRCod
     if coverage && inlinee_ir.stmts[1][:line] + linetable_offset != topline
         extra_coverage_line = topline
     end
+    isdebug && @show linetable
+    isdebug && println()
     return linetable_offset, extra_coverage_line
 end
 
@@ -981,7 +988,11 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
 end
 
 function retrieve_ir_for_inlining(mi::MethodInstance, src::String)
-    src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), mi.def, C_NULL, src)::CodeInfo
+    code = C_NULL
+    if isdefined(mi, :def) && mi.def isa Method && isdefined(mi, :cache) && isdefined(mi.cache, :inferred) && mi.cache.inferred !== nothing
+        code = mi.cache.inferred
+    end
+    src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), mi.def, code, src)::CodeInfo
     return inflate_ir!(src, mi)
 end
 retrieve_ir_for_inlining(mi::MethodInstance, src::CodeInfo) = inflate_ir(src, mi)

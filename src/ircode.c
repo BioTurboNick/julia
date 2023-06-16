@@ -25,6 +25,7 @@ typedef struct {
     ios_t *s;
     // method we're compressing for
     jl_method_t *method;
+    jl_method_instance_t *method_instance;
     jl_ptls_t ptls;
     uint8_t relocatability;
 } jl_ircode_state;
@@ -67,6 +68,12 @@ static void tagged_root(rle_reference *rr, jl_ircode_state *s, int i)
         s->relocatability = 0;
 }
 
+static void tagged_method_instance_root(rle_reference *rr, jl_ircode_state *s, int i)
+{
+    if (!get_method_instance_root_reference(rr, s->method_instance, i))
+        s->relocatability = 0;
+}
+
 static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v) JL_GC_DISABLED
 {
     jl_array_t *rs = s->method->roots;
@@ -85,6 +92,18 @@ static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v)
     }
     jl_add_method_root(s->method, jl_precompile_toplevel_module, v);
     return tagged_root(rr, s, jl_array_len(rs) - 1);
+}
+
+static void literal_val_method_instance_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v) JL_GC_DISABLED
+{
+    jl_array_t *rs = s->method_instance->roots;
+    int i, l = jl_array_len(rs);
+    for (i = 0; i < l; i++) {
+        if (jl_egal(jl_array_ptr_ref(rs, i), v))
+            return tagged_method_instance_root(rr, s, i);
+    }
+    jl_add_method_instance_root(s->method_instance, jl_precompile_toplevel_module, v);
+    return tagged_method_instance_root(rr, s, jl_array_len(rs) - 1);
 }
 
 static void jl_encode_int32(jl_ircode_state *s, int32_t x)
@@ -119,6 +138,46 @@ static void jl_encode_as_indexed_root(jl_ircode_state *s, jl_value_t *v)
         write_uint8(s->s, TAG_LONG_METHODROOT);
         write_uint32(s->s, id);
     }
+}
+
+// Encode a method instance for storing with its method instance, as well as the method name
+// as a method root as a fallback for when the method instance is not available. Intended
+// mainly for storage of method instances associated with linetable entries.
+static void jl_encode_as_indexed_method_instance_root(jl_ircode_state *s, jl_value_t *v)
+{
+    assert(jl_is_method_instance(v));
+
+    rle_reference rr;
+
+    literal_val_method_instance_id(&rr, s, v);
+
+    int id = rr.index;
+    assert(id >= 0);
+    if (rr.key) {
+        write_uint8(s->s, TAG_RELOC_METHODINSTROOT);
+        write_uint64(s->s, rr.key);
+    }
+    if (id <= UINT8_MAX) {
+        write_uint8(s->s, TAG_METHODINSTROOT);
+        write_uint8(s->s, id);
+    }
+    else {
+        assert(id <= UINT32_MAX);
+        write_uint8(s->s, TAG_LONG_METHODINSTROOT);
+        write_uint32(s->s, id);
+    }
+
+    jl_method_instance_t *mi = (jl_method_instance_t*)v;
+    jl_value_t* name = NULL;
+    if (jl_is_module(mi->def.value)) {
+        name = (jl_value_t*)mi->def.module->name;
+    }
+    else if (jl_is_method(mi->def.value)) {
+        name = (jl_value_t*)mi->def.method->name;
+    }
+    assert(name != NULL);
+
+    jl_encode_as_indexed_root(s, name);
 }
 
 static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) JL_GC_DISABLED
@@ -323,8 +382,13 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
     }
     else if (jl_typetagis(v, jl_lineinfonode_type)) {
         write_uint8(s->s, TAG_LINEINFO);
-        for (i = 0; i < jl_datatype_nfields(jl_lineinfonode_type); i++)
-            jl_encode_value(s, jl_get_nth_field(v, i));
+        for (i = 0; i < jl_datatype_nfields(jl_lineinfonode_type); i++) {
+            jl_value_t *vi = jl_get_nth_field(v, i);
+            if (jl_is_method_instance(vi))
+                jl_encode_as_indexed_method_instance_root(s, vi);
+            else
+                jl_encode_value(s, vi);
+        }
     }
     else if (((jl_datatype_t*)jl_typeof(v))->instance == v) {
         write_uint8(s->s, TAG_SINGLETON);
@@ -663,6 +727,64 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
         return lookup_root(s->method, 0, read_uint8(s->s));
     case TAG_LONG_METHODROOT:
         return lookup_root(s->method, 0, read_uint32(s->s));
+    case TAG_RELOC_METHODINSTROOT:
+        key = read_uint64(s->s);
+        tag = read_uint8(s->s);
+        assert(tag == TAG_METHODINSTROOT || tag == TAG_LONG_METHODINSTROOT);
+        index = -1;
+        if (tag == TAG_METHODINSTROOT)
+            index = read_uint8(s->s);
+        else if (tag == TAG_LONG_METHODINSTROOT)
+            index = read_uint32(s->s);
+        assert(index >= 0);
+        tag = read_uint8(s->s);
+        assert(tag == TAG_RELOC_METHODROOT || tag == TAG_METHODROOT || tag == TAG_LONG_METHODROOT);
+        int key_name = 0;
+        if (tag == TAG_RELOC_METHODROOT) {
+            key_name = read_uint64(s->s);
+            tag = read_uint8(s->s);
+            assert(tag == TAG_METHODROOT || tag == TAG_LONG_METHODROOT);
+        }
+        int index_name = -1;
+        if (tag == TAG_METHODROOT)
+            index_name = read_uint8(s->s);
+        else if (tag == TAG_LONG_METHODROOT)
+            index_name = read_uint32(s->s);
+        assert(index_name >= 0);
+        if (s->method_instance != NULL)
+            return lookup_method_instance_root(s->method_instance, key, index);
+        else
+            return lookup_root(s->method, key_name, index_name);
+    case TAG_METHODINSTROOT:
+        index = read_uint8(s->s);
+        assert(index >= 0);
+        tag = read_uint8(s->s);
+        assert(tag == TAG_METHODROOT || tag == TAG_LONG_METHODROOT);
+        index_name = -1;
+        if (tag == TAG_METHODROOT)
+            index_name = read_uint8(s->s);
+        else if (tag == TAG_LONG_METHODROOT)
+            index_name = read_uint32(s->s);
+        assert(index_name >= 0);
+        if (s->method_instance != NULL)
+            return lookup_method_instance_root(s->method_instance, 0, index);
+        else
+            return lookup_root(s->method, 0, index_name);
+    case TAG_LONG_METHODINSTROOT:
+        index = read_uint32(s->s);
+        assert(index >= 0);
+        tag = read_uint8(s->s);
+        assert(tag == TAG_METHODROOT || tag == TAG_LONG_METHODROOT);
+        index_name = -1;
+        if (tag == TAG_METHODROOT)
+            index_name = read_uint8(s->s);
+        else if (tag == TAG_LONG_METHODROOT)
+            index_name = read_uint32(s->s);
+        assert(index_name >= 0);
+        if (s->method_instance != NULL)
+            return lookup_method_instance_root(s->method_instance, 0, index);
+        else
+            return lookup_root(s->method, 0, index_name);
     case TAG_SVEC: JL_FALLTHROUGH; case TAG_LONG_SVEC:
         return jl_decode_value_svec(s, tag);
     case TAG_COMMONSYM:
@@ -779,9 +901,15 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
         m->roots = jl_alloc_vec_any(0);
         jl_gc_wb(m, m->roots);
     }
+    jl_method_instance_t *mi = code->parent;
+    if (mi != NULL && mi->roots == NULL) {
+        mi->roots = jl_alloc_vec_any(0);
+        jl_gc_wb(mi, mi->roots);
+    }
     jl_ircode_state s = {
         &dest,
         m,
+        mi,
         jl_current_task->ptls,
         1
     };
@@ -871,9 +999,15 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     ios_setbuf(&src, (char*)jl_string_data(data), jl_string_len(data), 0);
     src.size = jl_string_len(data);
     int en = jl_gc_enable(0); // Might GC
+    jl_method_instance_t *mi = NULL;
+    if (metadata != NULL) {
+        assert(jl_is_code_instance(metadata));
+        mi = metadata->def;
+    }
     jl_ircode_state s = {
         &src,
         m,
+        mi,
         jl_current_task->ptls,
         1
     };
