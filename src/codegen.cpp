@@ -3,9 +3,6 @@
 #undef DEBUG
 #include "llvm-version.h"
 #include "platform.h"
-#if defined(_CPU_X86_)
-#define JL_NEED_FLOATTEMP_VAR 1
-#endif
 #if defined(_OS_LINUX_) || defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_) || defined(_COMPILER_MSAN_ENABLED_)
 #define JL_DISABLE_FPO
 #endif
@@ -87,6 +84,13 @@
 #include <llvm/Linker/Linker.h>
 
 using namespace llvm;
+
+static bool jl_floattemp_var_needed(const Triple &TT) {
+#ifdef JL_NEED_FLOATTEMP_VAR
+    return true;
+#endif
+    return TT.getArch() == Triple::x86;
+}
 
 //Drag some useful type functions into our namespace
 //to reduce verbosity of our code
