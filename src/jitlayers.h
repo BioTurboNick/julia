@@ -168,6 +168,7 @@ typedef std::tuple<jl_returninfo_t::CallingConv, unsigned, llvm::Function*, bool
 typedef struct _jl_codegen_params_t {
     orc::ThreadSafeContext tsctx;
     orc::ThreadSafeContext::Lock tsctx_lock;
+    Triple TargetTriple;
 
     inline LLVMContext &getContext() {
         return *tsctx.getContext();
@@ -206,7 +207,7 @@ typedef struct _jl_codegen_params_t {
     bool cache = false;
     bool external_linkage = false;
     bool imaging;
-    _jl_codegen_params_t(orc::ThreadSafeContext ctx) : tsctx(std::move(ctx)), tsctx_lock(tsctx.getLock()), imaging(imaging_default()) {}
+    _jl_codegen_params_t(orc::ThreadSafeContext ctx, Triple triple) : tsctx(std::move(ctx)), tsctx_lock(tsctx.getLock()), TargetTriple(std::move(triple)), imaging(imaging_default()) {}
 } jl_codegen_params_t;
 
 jl_llvm_functions_t jl_emit_code(

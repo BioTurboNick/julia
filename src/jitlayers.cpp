@@ -194,7 +194,7 @@ static jl_callptr_t _jl_compile_codeinst(
 
     jl_callptr_t fptr = NULL;
     // emit the code in LLVM IR form
-    jl_codegen_params_t params(std::move(context)); // Locks the context
+    jl_codegen_params_t params(std::move(context), jl_ExecutionEngine->getTargetTriple()); // Locks the context
     params.cache = true;
     params.world = world;
     jl_workqueue_t emitted;
@@ -334,7 +334,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
         into = &backing;
     }
     JL_LOCK(&jl_codegen_lock);
-    jl_codegen_params_t params(into->getContext());
+    jl_codegen_params_t params(into->getContext(), jl_ExecutionEngine->getTargetTriple());
     if (pparams == NULL)
         pparams = &params;
     assert(pparams->tsctx.getContext() == into->getContext().getContext());

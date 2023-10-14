@@ -303,7 +303,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     // compile all methods for the current world and type-inference world
 
     JL_LOCK(&jl_codegen_lock);
-    jl_codegen_params_t params(ctxt);
+    jl_codegen_params_t params(ctxt, jl_ExecutionEngine->getTargetTriple());
     params.params = cgparams;
     params.imaging = imaging;
     params.external_linkage = _external_linkage;
@@ -1087,7 +1087,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
         if (measure_compile_time_enabled)
             compiler_start_time = jl_hrtime();
         JL_LOCK(&jl_codegen_lock);
-        jl_codegen_params_t output(*ctx);
+        jl_codegen_params_t output(*ctx, jl_ExecutionEngine->getTargetTriple());
         output.world = world;
         output.params = &params;
         auto decls = jl_emit_code(m, mi, src, jlrettype, output);
